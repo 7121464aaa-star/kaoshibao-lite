@@ -1,0 +1,10 @@
+# Node
+node_modules/
+
+# 构建产物（PWA 站由 GitHub Actions 重建；本地保留可随时 build）
+dist/
+
+# 杂项
+*.log
+.DS_Store
+Thumbs.db

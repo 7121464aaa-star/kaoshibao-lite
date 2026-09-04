@@ -1,0 +1,11 @@
+{
+  "name": "kaoshibao-lite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "考试宝自用版：本地无VIP刷题应用（判分必达）",
+  "scripts": {
+    "build": "node tools/build-single.mjs",
+    "dev": "node tools/serve.mjs"
+  },
+  "license": "UNLICENSED"
+}

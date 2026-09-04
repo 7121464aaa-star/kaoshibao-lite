@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>考试宝自用版</title>
+  <meta name="description" content="考试宝自用版：纯本地 · 无 VIP · 判分必达的个人刷题平台（PWA 可安装）">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">📚 考试宝自用版 <span class="m0-tag">M3</span></div>
+      <div class="bank-row">
+        <select id="bankSelect" title="当前题库"></select>
+        <button id="btnReset" class="btn btn-ghost" title="清空本次作答，重新开始">重新开始</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 统计条 -->
+  <section class="statsbar">
+    <span>已答 <b id="statAnswered">0/0</b></span>
+    <span class="s-correct">答对 <b id="statCorrect">0</b></span>
+    <span class="s-wrong">答错 <b id="statWrong">0</b></span>
+    <span>正确率 <b id="statRate">—</b></span>
+    <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
+  </section>
+
+  <!-- Tab -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="practice">刷题</button>
+    <button class="tab" data-tab="exam">模拟考试</button>
+    <button class="tab" data-tab="wrong">错题本</button>
+    <button class="tab" data-tab="stars">收藏</button>
+    <button class="tab" data-tab="search">搜题</button>
+    <button class="tab" data-tab="stats">统计</button>
+    <button class="tab" data-tab="banks">题库管理</button>
+    <button class="tab" data-tab="import">导入题库</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </nav>
+
+  <main>
+    <!-- ========== 刷题视图 ========== -->
+    <section id="view-practice">
+      <div class="source-bar">
+        <span>题型：</span>
+        <button class="chip active" data-ftype="single">单选</button>
+        <button class="chip active" data-ftype="multiple">多选</button>
+        <button class="chip active" data-ftype="judge">判断</button>
+        <button class="chip active" data-ftype="fill">填空</button>
+        <span class="mode-tip">点掉某类 = 练习中排除该类（如只留单选）；至少保留一类</span>
+      </div>
+      <div class="source-bar">
+        <span>练习源：</span>
+        <button class="chip active" data-src="all">本库全部</button>
+        <button class="chip" data-src="wrong">错题重练 <b class="cnt" id="srcWrongCount">0</b></button>
+        <button class="chip" data-src="star">我的收藏 <b class="cnt" id="srcStarCount">0</b></button>
+        <span class="mode-tip" id="srcTip"></span>
+      </div>
+      <div class="source-bar">
+        <span>章节：</span>
+        <span id="chapterChips" class="chips-inline"></span>
+        <span class="mode-tip" id="chapterTip"></span>
+      </div>
+      <div class="mode-bar">
+        <span class="mode-label">模式：</span>
+        <button class="chip active" data-mode="seq">顺序</button>
+        <button class="chip" data-mode="rand">随机</button>
+        <span class="mode-tip" id="modeTip"></span>
+      </div>
+      <div class="question-card">
+        <div class="q-head">
+          <div class="q-meta" id="qMeta">—</div>
+          <button id="btnStar" class="btn-star" title="收藏/取消收藏本题">☆</button>
+        </div>
+        <div class="q-stem" id="qStem"></div>
+        <div id="qOptions" class="options"></div>
+        <div id="feedback" class="feedback" hidden></div>
+        <div id="doneTip" class="done-tip" hidden>
+          <div id="doneText"></div>
+          <button class="btn btn-primary" onclick="document.getElementById('btnReset').click()">再来一遍</button>
+        </div>
+        <div class="nav-row">
+          <button id="btnPrev" class="btn">← 上一题</button>
+          <button id="btnNext" class="btn btn-primary">下一题 →</button>
+        </div>
+      </div>
+      <div class="sheet-wrap">
+        <div class="sheet-title" id="sheetTitle">答题卡（绿=对 红=错 灰=未答 点击跳转）</div>
+        <div id="answerSheet" class="answer-sheet"></div>
+      </div>
+    </section>
+
+    <!-- ========== 模拟考试视图 ========== -->
+    <section id="view-exam" class="hidden">
+      <div id="examConfig" class="exam-card">
+        <div class="exam-title">📝 模拟考试</div>
+        <div class="form-row"><label>题库：</label><select id="exBank"></select></div>
+        <div class="form-row"><label>题量：</label><select id="exNum"></select></div>
+        <div class="form-row"><label>限时：</label><select id="exTime">
+          <option value="0">不限时</option>
+          <option value="5">5 分钟</option>
+          <option value="10" selected>10 分钟</option>
+          <option value="15">15 分钟</option>
+          <option value="30">30 分钟</option>
+          <option value="60">60 分钟</option>
+        </select></div>
+        <div class="form-note" id="exNote"></div>
+        <button id="btnStartExam" class="btn btn-primary">开始考试</button>
+      </div>
+      <div id="examRun" class="hidden">
+        <div class="exam-head">
+          <span id="exTitle"></span>
+          <span id="exTimer" class="timer"></span>
+        </div>
+        <div class="question-card">
+          <div class="q-head"><div class="q-meta" id="exMeta"></div></div>
+          <div class="q-stem" id="exStem"></div>
+          <div id="exOptions" class="options"></div>
+          <div class="nav-row">
+            <button id="btnExPrev" class="btn">← 上一题</button>
+            <button id="btnExNext" class="btn btn-primary">下一题 →</button>
+          </div>
+        </div>
+        <div class="sheet-wrap">
+          <div class="sheet-title" id="exSheetTitle">答题卡（绿=已答，点击跳转；交卷前可随时修改）</div>
+          <div id="exSheet" class="answer-sheet"></div>
+        </div>
+        <div class="exam-foot">
+          <button id="btnSubmitExam" class="btn btn-primary">交卷判分</button>
+          <span class="mode-tip">交卷后统一判分，答错自动进错题本；未答计错但不进错题本</span>
+        </div>
+      </div>
+      <div id="examResult" class="hidden">
+        <div id="exResultHead" class="exam-result-head"></div>
+        <div class="sheet-title">逐题结果（你的答案 / 正确答案 / 解析）</div>
+        <div id="exResultWrap"></div>
+        <div class="nav-row">
+          <button id="btnExamAgain" class="btn">再来一场</button>
+          <button id="btnExamBack" class="btn btn-primary">完成，回刷题</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 错题本视图 ========== -->
+    <section id="view-wrong" class="hidden">
+      <div class="source-bar">
+        <span>范围：</span>
+        <button class="chip active" data-wscope="bank">当前题库</button>
+        <button class="chip" data-wscope="all">全库汇总</button>
+        <span class="mode-tip" id="wrongScopeTip"></span>
+      </div>
+      <div id="wrongSummary" class="wrong-summary"></div>
+      <div id="wrongTools" class="wrong-tools">
+        <button id="btnWrongPractice" class="btn">▶ 重练本库错题</button>
+        <button id="btnWrongClear" class="btn btn-danger">已掌握：全部移除</button>
+      </div>
+      <div id="wrongList"></div>
+    </section>
+
+    <!-- ========== 收藏视图（全库汇总） ========== -->
+    <section id="view-stars" class="hidden">
+      <div class="source-bar">
+        <span>范围：</span>
+        <button class="chip" data-sscope="bank">当前题库</button>
+        <button class="chip active" data-sscope="all">全库汇总</button>
+        <span class="mode-tip" id="starScopeTip"></span>
+      </div>
+      <div id="starSummary" class="wrong-summary"></div>
+      <div id="starList"></div>
+    </section>
+
+    <!-- ========== 搜题视图（本地关键词） ========== -->
+    <section id="view-search" class="hidden">
+      <div class="import-card">
+        <div class="search-title">🔍 本地搜题</div>
+        <div class="form-row">
+          <label>范围：</label>
+          <button class="chip active" data-qscope="bank">当前题库</button>
+          <button class="chip" data-qscope="all">全部题库</button>
+        </div>
+        <div class="form-row">
+          <input id="searchInput" placeholder="输入关键词，可空格分隔多个（AND 匹配题干/选项/解析/章节）">
+          <button id="btnSearch" class="btn btn-primary">搜索</button>
+          <button id="btnSearchReset" class="btn">重置</button>
+        </div>
+        <div class="form-note">支持大小写/全半角不敏感；结果按题库+题目顺序展示。点结果卡可看答案/解析、收藏或直接练此题。</div>
+      </div>
+      <div id="searchReport" class="imp-report hidden"></div>
+      <div id="searchList"></div>
+    </section>
+
+    <!-- ========== 统计视图 ========== -->
+    <section id="view-stats" class="hidden">
+      <div class="stat-cards" id="statCards"></div>
+      <div class="stat-block">
+        <div class="stat-title">近 14 天答题量（绿=对 · 红=错）</div>
+        <div id="dailyBars" class="daily-bars"></div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-title">练习与考试记录
+          <button id="btnHistClear" class="btn btn-xs btn-danger">清空历史</button>
+        </div>
+        <div id="histList"></div>
+      </div>
+    </section>
+
+    <!-- ========== 题库管理视图 ========== -->
+    <section id="view-banks" class="hidden">
+      <div class="banks-head">
+        <button id="btnNewBank" class="btn btn-primary">＋ 新建题库</button>
+      </div>
+      <div id="newBankForm" class="new-bank hidden">
+        <input id="nbName" placeholder="题库名称（必填）">
+        <input id="nbDesc" placeholder="简介（可选）">
+        <button id="btnNbOk" class="btn btn-primary">创建</button>
+        <button id="btnNbCancel" class="btn">取消</button>
+      </div>
+      <div id="bankList"></div>
+      <div class="stat-block" id="mergeCard">
+        <div class="stat-title">多题库合并 / 移动题目</div>
+        <div class="form-row">
+          <label>源题库：</label><select id="mergeSrc"></select>
+          <label>→ 目标题库：</label><select id="mergeDst"></select>
+        </div>
+        <div class="form-note">把"源题库"的全部题目移入"目标题库"（错题/收藏记录随题目迁移），移动后源题库被删除。误合并可先做一次备份（设置页）。</div>
+        <button id="btnMerge" class="btn btn-primary btn-xs">执行合并</button>
+      </div>
+    </section>
+
+    <!-- ========== 导入题库视图 ========== -->
+    <section id="view-import" class="hidden">
+      <div class="import-card">
+        <div class="form-row">
+          <label>导入到：</label>
+          <select id="impTarget"></select>
+        </div>
+        <div class="form-row hidden" id="impNewRow">
+          <input id="impNewName" placeholder="新题库名称（必填）">
+        </div>
+        <div class="form-row">
+          <label>源格式：</label>
+          <button class="chip active" data-fmt="text">段落文字</button>
+          <button class="chip" data-fmt="csv">CSV 表格</button>
+          <button class="chip" data-fmt="json">JSON 题库</button>
+        </div>
+        <div class="fmt-hint" id="impHint"></div>
+        <div class="form-row">
+          <textarea id="impSource" rows="9" spellcheck="false" placeholder="把题目文本粘贴到这里（可从 Word/考试宝文档复制），或点下方按钮载入文件…"></textarea>
+        </div>
+        <div class="form-row">
+          <label class="file-btn btn">📂 载入文件（.txt/.csv/.json/.docx）
+            <input id="impFile" type="file" accept=".txt,.csv,.json,.docx,.doc,text/plain,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+          </label>
+          <button id="btnFillSample" class="btn">填入示例</button>
+          <button id="btnParse" class="btn btn-primary">解析预览</button>
+        </div>
+        <div id="impReport" class="imp-report hidden"></div>
+        <div id="impPreview"></div>
+        <div class="form-row hidden" id="impImportRow">
+          <button id="btnImport" class="btn btn-primary">✓ 确认导入</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 设置视图（备份/恢复 + 云同步） ========== -->
+    <section id="view-settings" class="hidden">
+      <div class="import-card">
+        <div class="exam-title">💾 备份 / 恢复</div>
+        <div id="bakInfo" class="form-note">—</div>
+        <div class="form-row">
+          <button id="btnExportBak" class="btn btn-primary">⬇ 导出备份（JSON 快照）</button>
+          <label class="file-btn btn">⬆ 从备份文件恢复
+            <input id="bakFile" type="file" accept=".json,application/json" hidden>
+          </label>
+        </div>
+        <div class="form-note">备份文件包含全部题库/题目/错题/收藏/历史，可下载保存或复制到其它设备。
+          <b>恢复会整体替换当前数据</b>（恢复前建议先导出一份当前备份）。同格式文件也可在"导入题库 → JSON"识别后提示走本页恢复。</div>
+        <div id="bakReport" class="imp-report hidden"></div>
+      </div>
+
+      <div class="import-card" style="margin-top:12px">
+        <div class="exam-title">☁️ 云同步（GitHub Secret Gist）</div>
+        <div id="synInfo" class="form-note">—</div>
+        <div class="form-row">
+          <label>GitHub 用户名：</label><input id="synUser" autocomplete="off" placeholder="如 yourname">
+          <label>Gist ID（可选，首次推送后自动生成）：</label><input id="synGist" autocomplete="off" placeholder="自动填充，一般无需手填">
+        </div>
+        <div class="form-row">
+          <label>Token（仅需 gist 权限）：</label><input id="synToken" type="password" autocomplete="off" placeholder="ghp_…（只在浏览器生成，勾选 gist 即可）">
+          <button id="btnSynSave" class="btn">保存</button>
+        </div>
+        <div class="form-row">
+          <button id="btnSynPush" class="btn btn-primary">⬆ 推送到云端</button>
+          <button id="btnSynPull" class="btn">⬇ 从云端拉取</button>
+          <span class="mode-tip">冲突策略：后写覆盖 + 自动快照（覆盖前自动保存，最多保留 5 份，可还原）</span>
+        </div>
+        <div class="form-note">凭据（token/用户名）<b>只保存在本机浏览器</b>，推送内容自动剥离凭据；从云端拉取也不会覆盖本机凭据。
+          Token 请在 GitHub → Settings → Developer settings → Personal access tokens 生成（勾选 gist scope，勿勾其它），粘贴到上方即可。
+          如何部署成 PWA / 从旧 file:// 数据迁移：见 docs/部署指引（仓库内）。</div>
+        <div id="synReport" class="imp-report hidden"></div>
+        <div class="form-note" style="margin-top:10px"><b>自动快照（冲突覆盖前保存，可一键还原）：</b></div>
+        <div id="synSnapList"></div>
+      </div>
+
+      <div class="import-card" style="margin-top:12px">
+        <div class="exam-title">ℹ️ 关于</div>
+        <div class="form-note">考试宝自用版 · 纯本地离线刷题。数据只保存在本浏览器（IndexedDB），不会上传。
+          换设备/换浏览器：设置页导出备份 → 新设备导入恢复；或开启上方"云同步"后在两端互相同步。
+          清空浏览器数据前请先导出备份或推送到云端。</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    判分必达 · 本地数据不出设备 · 无需会员
+  </footer>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="js/model.js"></script>
+  <script src="js/grade.js"></script>
+  <script src="js/data-sample.js"></script>
+  <script src="js/docx.js"></script>
+  <script src="js/importer.js"></script>
+  <script src="js/bank-mgmt.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/exam.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/sync.js"></script>
+  <script>
+    /* PWA Service Worker 注册（M4）：仅在 http(s) 下注册（file:// 与不支持环境静默跳过） */
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () { /* 注册失败不影响主功能 */ });
+      });
+    })();
+  </script>
+</body>
+</html>

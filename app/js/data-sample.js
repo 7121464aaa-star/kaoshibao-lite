@@ -1,0 +1,95 @@
+/* 样例题库：20 题（单选9 / 多选4 / 判断4 / 填空3）—— 轻量版不含简答题
+   均为自编常识题，用于全流程联调与判分验证。 */
+window.SAMPLE_BANK = {
+  bank: {
+    id: 'bank-sample-001',
+    name: '样例题库（20题）',
+    description: '全流程联调样例：单选×9、多选×4、判断×4、填空×3（轻量版，无简答）',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  questions: [
+    // ---------------- 单选 ----------------
+    { type: 'single', chapter: '常识',
+      stem: '一年中北半球白昼最长的一天通常出现在哪个节气前后？',
+      options: [{ key: 'A', text: '夏至' }, { key: 'B', text: '冬至' }, { key: 'C', text: '春分' }, { key: 'D', text: '秋分' }],
+      answer: 'A', analysis: '夏至日太阳直射北回归线，北半球白昼最长、黑夜最短。' },
+    { type: 'single', chapter: '计算机',
+      stem: '在计算机中，1 KB（千字节）等于多少字节？',
+      options: [{ key: 'A', text: '1000' }, { key: 'B', text: '1024' }, { key: 'C', text: '512' }, { key: 'D', text: '2048' }],
+      answer: 'B', analysis: '计算机采用二进制，1 KB = 2^10 = 1024 字节；1 MB = 1024 KB。' },
+    { type: 'single', chapter: '常识',
+      stem: '“床前明月光，疑是地上霜”出自哪位诗人？',
+      options: [{ key: 'A', text: '李白' }, { key: 'B', text: '杜甫' }, { key: 'C', text: '白居易' }, { key: 'D', text: '王维' }],
+      answer: 'A', analysis: '出自李白《静夜思》：“床前明月光，疑是地上霜。举头望明月，低头思故乡。”' },
+    { type: 'single', chapter: '科学',
+      stem: '在标准大气压下，水的沸点是多少摄氏度？',
+      options: [{ key: 'A', text: '90' }, { key: 'B', text: '100' }, { key: 'C', text: '120' }, { key: 'D', text: '80' }],
+      answer: 'B', analysis: '标准大气压下纯水的沸点为 100 ℃；气压越低沸点越低（如高原上水不到 100 ℃就开）。' },
+    { type: 'single', chapter: '常识',
+      stem: '我国铁路采用的标准轨距是多少毫米？',
+      options: [{ key: 'A', text: '1000' }, { key: 'B', text: '1067' }, { key: 'C', text: '1435' }, { key: 'D', text: '1520' }],
+      answer: 'C', analysis: '标准轨距 1435 毫米（4 英尺 8.5 英寸），为世界多数国家采用。' },
+    { type: 'single', chapter: '科学',
+      stem: '“光年”是什么物理量的单位？',
+      options: [{ key: 'A', text: '时间' }, { key: 'B', text: '速度' }, { key: 'C', text: '长度' }, { key: 'D', text: '亮度' }],
+      answer: 'C', analysis: '光年是光在真空中一年走过的距离，属长度单位，约 9.46 万亿千米。' },
+    { type: 'single', chapter: '科学',
+      stem: '血液中负责运输氧气的主要细胞是？',
+      options: [{ key: 'A', text: '白细胞' }, { key: 'B', text: '血小板' }, { key: 'C', text: '红细胞' }, { key: 'D', text: '血浆' }],
+      answer: 'C', analysis: '红细胞内的血红蛋白与氧结合运输氧气；白细胞免疫，血小板凝血，血浆运载血细胞与营养。' },
+    { type: 'single', chapter: '常识',
+      stem: '空气质量指标“PM2.5”指的是什么？',
+      options: [{ key: 'A', text: '臭氧浓度' }, { key: 'B', text: '直径≤2.5微米的可吸入颗粒物' }, { key: 'C', text: '二氧化硫浓度' }, { key: 'D', text: '一氧化碳浓度' }],
+      answer: 'B', analysis: 'PM2.5 指空气动力学直径小于等于 2.5 微米的细颗粒物，可进入肺泡，影响健康。' },
+
+    // ---------------- 多选 ----------------
+    { type: 'multiple', chapter: '计算机',
+      stem: '以下哪些属于计算机的输入设备？（多选）',
+      options: [{ key: 'A', text: '键盘' }, { key: 'B', text: '鼠标' }, { key: 'C', text: '显示器' }, { key: 'D', text: '扫描仪' }],
+      answer: ['A', 'B', 'D'], analysis: '键盘、鼠标、扫描仪向计算机输入信息；显示器是输出设备。' },
+    { type: 'multiple', chapter: '科学',
+      stem: '下列能源中，属于可再生能源的有？（多选）',
+      options: [{ key: 'A', text: '太阳能' }, { key: 'B', text: '风能' }, { key: 'C', text: '煤炭' }, { key: 'D', text: '水能' }],
+      answer: ['A', 'B', 'D'], analysis: '太阳能、风能、水能可持续再生；煤炭为化石能源，不可再生。' },
+    { type: 'multiple', chapter: '常识',
+      stem: '下列选项中，属于我国古代四大发明的有？（多选）',
+      options: [{ key: 'A', text: '造纸术' }, { key: 'B', text: '指南针' }, { key: 'C', text: '地动仪' }, { key: 'D', text: '活字印刷术' }],
+      answer: ['A', 'B', 'D'], analysis: '四大发明：造纸术、指南针、火药、印刷术。地动仪是张衡发明的测震仪器，不在其列。' },
+    { type: 'multiple', chapter: '常识',
+      stem: '以下哪些属于有氧运动？（多选）',
+      options: [{ key: 'A', text: '慢跑' }, { key: 'B', text: '游泳' }, { key: 'C', text: '百米短跑冲刺' }, { key: 'D', text: '骑行' }],
+      answer: ['A', 'B', 'D'], analysis: '慢跑、游泳、骑行强度适中可持续供氧；百米冲刺属无氧运动。' },
+
+    // ---------------- 判断 ----------------
+    { type: 'judge', chapter: '科学',
+      stem: '地球上的潮汐现象主要是由月球的引力引起的。',
+      answer: true, analysis: '潮汐主要受月球引力作用，太阳引力也有影响但较小。' },
+    { type: 'judge', chapter: '科学',
+      stem: '声音可以在真空中传播。',
+      answer: false, analysis: '声音的传播需要介质（空气、水、固体等），真空中无法传播。' },
+    { type: 'judge', chapter: '常识',
+      stem: '平年的 2 月有 29 天。',
+      answer: false, analysis: '平年 2 月 28 天，闰年（能被4整除且不逢百年，或能被400整除）2 月才有 29 天。' },
+    { type: 'judge', chapter: '科学',
+      stem: '光在真空中的传播速度约为每秒 30 万千米。',
+      answer: true, analysis: '光速 c ≈ 3×10^8 m/s = 30 万千米/秒。' },
+
+    // ---------------- 填空 ----------------
+    { type: 'fill', chapter: '科学',
+      stem: '太阳系中距离太阳最近的行星是（　）。',
+      answer: [['水星']], analysis: '八大行星由近及远：水星、金星、地球、火星、木星、土星、天王星、海王星。' },
+    { type: 'fill', chapter: '常识',
+      stem: '我国的国歌名称是《（　）》。',
+      answer: [['义勇军进行曲', '义勇军军歌']], analysis: '《义勇军进行曲》由田汉作词、聂耳作曲，1949 年定为代国歌，2004 年写入宪法。' },
+    { type: 'fill', chapter: '科学',
+      stem: '空气中含量最多的气体是（　）。',
+      answer: [['氮气', '氮', 'N2', 'N₂']], analysis: '氮气约占空气体积的 78%，氧气约占 21%。' },
+
+    // ---------------- 单选（替代原简答位，保持 20 题） ----------------
+    { type: 'single', chapter: '科学',
+      stem: '人体内含量最多的金属元素是？',
+      options: [{ key: 'A', text: '钙' }, { key: 'B', text: '铁' }, { key: 'C', text: '钠' }, { key: 'D', text: '钾' }],
+      answer: 'A', analysis: '钙约占成人体重的 1.5%（约1.2kg），是含量最多的金属元素；铁是含量最多的微量元素。' }
+  ]
+};
