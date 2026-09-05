@@ -17,7 +17,7 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M8</span></div>
+      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M9</span></div>
       <div class="bank-row">
         <select id="bankSelect" title="当前题库"></select>
         <button id="btnReset" class="btn btn-ghost" title="清空本次作答，重新开始">重新开始</button>
@@ -300,10 +300,33 @@
             <button type="button" class="theme-swatch" data-theme="paper" role="radio" aria-checked="false"><i class="sw-paper"></i><span>暖米纸张</span></button>
           </div>
         </div>
+        <div class="form-row" style="align-items:flex-start">
+          <label style="padding-top:6px">模式：</label>
+          <div class="pick-group" id="modeGroup" role="group" aria-label="亮度模式">
+            <button type="button" class="pick-btn mode-btn" data-mode="sun" aria-pressed="true">☀️ 日光<span class="pick-desc">天亮/白天用（浅色底）</span></button>
+            <button type="button" class="pick-btn mode-btn" data-mode="moon" aria-pressed="false">🌙 月光<span class="pick-desc">天暗/夜间用（深色底）</span></button>
+          </div>
+        </div>
+        <div class="form-row" style="align-items:flex-start">
+          <label style="padding-top:6px">日光背景：</label>
+          <div class="pick-group shade-seg" data-for="sun" role="group" aria-label="日光背景深浅">
+            <button type="button" class="pick-btn shade-btn" data-shade="1" aria-pressed="false">柔和</button>
+            <button type="button" class="pick-btn shade-btn" data-shade="2" aria-pressed="true">标准</button>
+            <button type="button" class="pick-btn shade-btn" data-shade="3" aria-pressed="false">明亮</button>
+          </div>
+        </div>
+        <div class="form-row" style="align-items:flex-start">
+          <label style="padding-top:6px">月光背景：</label>
+          <div class="pick-group shade-seg" data-for="moon" role="group" aria-label="月光背景深浅">
+            <button type="button" class="pick-btn shade-btn" data-shade="1" aria-pressed="false">柔灰</button>
+            <button type="button" class="pick-btn shade-btn" data-shade="2" aria-pressed="true">标准</button>
+            <button type="button" class="pick-btn shade-btn" data-shade="3" aria-pressed="false">近黑</button>
+          </div>
+        </div>
         <div class="form-row">
           <label class="switch-row"><input type="checkbox" id="optAutoNext" checked> <span>答对自动下一题（约 0.6 秒）</span></label>
         </div>
-        <div class="form-note">配色立即生效并记住在本机。自动下一题仅在「刷题」模式生效：答对约 0.6 秒后自动切下一题，答错停留看正确答案/解析；模拟考试不受影响（交卷才判分）。</div>
+        <div class="form-note">配色决定整体色系（青蓝/护眼绿/暖米），模式与背景档位决定底色亮度：☀️ 日光用浅色底，🌙 月光用深色底（夜里/暗处护眼），各自还能选背景深浅档位。全部立即生效并记住在本机。自动下一题仅在「刷题」模式生效：答对约 0.6 秒后自动切下一题，答错停留看正确答案/解析；模拟考试不受影响（交卷才判分）。</div>
       </div>
 
       <div class="import-card" style="margin-top:12px">

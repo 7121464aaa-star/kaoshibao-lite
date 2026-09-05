@@ -61,11 +61,22 @@
   const starScope = { cur: 'all' };     // 收藏页签范围 'bank' | 'all'
   let lastQid = null;                   // M7：上一道渲染的题目 id（用于切换题目时播放入场动画）
 
-  /* M8：答对自动下一题 定时器 + 本机偏好（主题/自动下一题，存 settings，见设置页） */
+  /* M8：答对自动下一题 定时器 + 本机偏好（主题/自动下一题，存 settings，见设置页）
+     M9：新增「模式」维度（日光=浅色底 / 月光=深色底，正交于配色）+ 两种模式的「背景深浅」档位（1柔和/2标准/3明亮、1柔灰/2标准/3近黑） */
   let autoNextTimer = null;
-  const prefs = { theme: 'default', autoNext: true };
+  const prefs = { theme: 'default', mode: 'sun', autoNext: true, shadeSun: '2', shadeMoon: '2' };
   const THEME_COLORS = { default: '#2563eb', green: '#15803d', paper: '#b45309' };
   const THEME_NAMES = { default: '默认青蓝', green: '护眼绿', paper: '暖米纸张' };
+  const MODE_NAMES = { sun: '日光', moon: '月光' };
+  const SHADE_LABEL = {
+    sun:  { '1': '柔和', '2': '标准', '3': '明亮' },
+    moon: { '1': '柔灰', '2': '标准', '3': '近黑' }
+  };
+  /* meta theme-color（手机浏览器顶栏/任务卡配色）：日光沿用配色主色，月光用对应深色背景 */
+  const META_COLORS = {
+    sun:  THEME_COLORS,
+    moon: { default: '#0f1a2b', green: '#0d1711', paper: '#191109' }
+  };
   const AUTO_NEXT_DELAY = 600;          // 答对后自动跳下一题的延迟（毫秒）
 
   /* ============ 供其它模块调用 ============ */
@@ -114,32 +125,66 @@
     showTab('practice');
   }
 
-  /* M8：读取并应用本机偏好（配色主题 + 答对自动下一题开关） */
+  /* M8+M9：读取并应用本机偏好（配色主题 + 模式(日光/月光) + 两种模式的背景深浅档位 + 答对自动下一题开关） */
   async function loadPrefs() {
     try {
       const t = await KSB.getSetting('theme');
       if (t && THEME_COLORS[t]) prefs.theme = t;
+      const m = await KSB.getSetting('mode');
+      if (m === 'sun' || m === 'moon') prefs.mode = m;
+      const ss = await KSB.getSetting('shadeSun');
+      if (ss && SHADE_LABEL.sun[ss]) prefs.shadeSun = ss;
+      const sm = await KSB.getSetting('shadeMoon');
+      if (sm && SHADE_LABEL.moon[sm]) prefs.shadeMoon = sm;
       const an = await KSB.getSetting('autoNext');
       prefs.autoNext = an !== false;     // 默认开启
     } catch (e) { /* 读取失败保持默认 */ }
-    applyTheme(prefs.theme);
+    applyAppearance();
     syncPrefControls();
   }
 
-  function applyTheme(name) {
-    if (!THEME_COLORS[name]) return;
-    prefs.theme = name;
-    document.documentElement.dataset.theme = name;
+  /* M9：把 配色(theme) × 模式(mode) × 背景档位(shade) 落到 <html> 属性上，CSS 依此出整套外观；
+     data-theme 决定色系，data-mode="moon" 决定深色底，data-shade 决定该模式下的背景深浅档位 */
+  function applyAppearance() {
+    const el = document.documentElement;
+    el.dataset.theme = prefs.theme;
+    el.dataset.mode = prefs.mode;
+    el.dataset.shade = prefs.mode === 'moon' ? prefs.shadeMoon : prefs.shadeSun;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = THEME_COLORS[name];
+    if (meta) {
+      const set = META_COLORS[prefs.mode] || META_COLORS.sun;
+      meta.content = set[prefs.theme] || THEME_COLORS[prefs.theme] || '#2563eb';
+    }
   }
 
   async function pickTheme(name) {
     if (!THEME_COLORS[name]) return;
-    applyTheme(name);
+    prefs.theme = name;
+    applyAppearance();
     syncPrefControls();
     KSB.toast('已切换为「' + (THEME_NAMES[name] || name) + '」配色', 'ok');
     try { await KSB.setSetting('theme', name); } catch (e) { /* 持久化失败不影响本次 */ }
+  }
+
+  async function pickMode(mode) {
+    if (mode !== 'sun' && mode !== 'moon') return;
+    prefs.mode = mode;
+    applyAppearance();
+    syncPrefControls();
+    KSB.toast('已切换到「' + MODE_NAMES[mode] + '」模式' +
+      (mode === 'moon' ? '（深色底，适合天暗/夜间）' : '（浅色底，适合天亮/白天）'), 'ok');
+    try { await KSB.setSetting('mode', mode); } catch (e) { /* 同上 */ }
+  }
+
+  async function pickShade(mode, val) {
+    if (!SHADE_LABEL[mode] || !SHADE_LABEL[mode][val]) return;
+    if (mode === 'sun') prefs.shadeSun = val; else prefs.shadeMoon = val;
+    if (prefs.mode === mode) applyAppearance();   // 只影响当前生效模式的背景
+    syncPrefControls();
+    KSB.toast('已设置' + MODE_NAMES[mode] + '背景：' + SHADE_LABEL[mode][val], '');
+    try {
+      await KSB.setSetting(mode === 'sun' ? 'shadeSun' : 'shadeMoon', val);
+    } catch (e) { /* 同上 */ }
   }
 
   async function setAutoNextPref(on) {
@@ -153,6 +198,19 @@
       const on = b.dataset.theme === prefs.theme;
       b.classList.toggle('active', on);
       b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    $$('#modeGroup .mode-btn').forEach(b => {
+      const on = b.dataset.mode === prefs.mode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    ['sun', 'moon'].forEach(m => {
+      const cur = m === 'sun' ? prefs.shadeSun : prefs.shadeMoon;
+      $$('.shade-seg[data-for="' + m + '"] .shade-btn').forEach(b => {
+        const on = b.dataset.shade === cur;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
     });
     const cb = $('#optAutoNext');
     if (cb) cb.checked = !!prefs.autoNext;
@@ -373,6 +431,11 @@
 
     // M8：外观与刷题习惯（设置页）
     $$('#themeSwatches .theme-swatch').forEach(b => b.addEventListener('click', () => pickTheme(b.dataset.theme)));
+    // M9：模式（日光/月光）与两种模式的背景深浅档位
+    $$('#modeGroup .mode-btn').forEach(b => b.addEventListener('click', () => pickMode(b.dataset.mode)));
+    $$('.shade-seg .shade-btn').forEach(b => {
+      b.addEventListener('click', () => pickShade(b.closest('.shade-seg').dataset.for, b.dataset.shade));
+    });
     $('#optAutoNext').addEventListener('change', e => setAutoNextPref(e.target.checked));
   }
 
