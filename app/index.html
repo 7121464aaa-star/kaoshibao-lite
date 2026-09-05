@@ -17,7 +17,7 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M7</span></div>
+      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M8</span></div>
       <div class="bank-row">
         <select id="bankSelect" title="当前题库"></select>
         <button id="btnReset" class="btn btn-ghost" title="清空本次作答，重新开始">重新开始</button>
@@ -50,31 +50,44 @@
   <main>
     <!-- ========== 刷题视图 ========== -->
     <section id="view-practice">
-      <div class="source-bar">
-        <span>题型：</span>
-        <button class="chip active" data-ftype="single">单选</button>
-        <button class="chip active" data-ftype="multiple">多选</button>
-        <button class="chip active" data-ftype="judge">判断</button>
-        <button class="chip active" data-ftype="fill">填空</button>
-        <span class="mode-tip">点掉某类 = 练习中排除该类（如只留单选）；至少保留一类</span>
+      <!-- M8：顶部只留一行入口（筛选 / 答题卡），面板与答题卡默认收起，把垂直空间让给题目与选项 -->
+      <div class="ptoolbar">
+        <button id="btnFilterToggle" class="btn ptool-btn" type="button" aria-expanded="false">⚙ 筛选</button>
+        <div class="ptool-status" id="filterSummary" title="">本库全部 · 全题型 · 顺序 · 全章节</div>
+        <button id="btnSheetToggle" class="btn ptool-btn" type="button" aria-expanded="false">🗂 答题卡 <b class="cnt" id="sheetCount">0/0</b></button>
       </div>
-      <div class="source-bar">
-        <span>练习源：</span>
-        <button class="chip active" data-src="all">本库全部</button>
-        <button class="chip" data-src="wrong">错题重练 <b class="cnt" id="srcWrongCount">0</b></button>
-        <button class="chip" data-src="star">我的收藏 <b class="cnt" id="srcStarCount">0</b></button>
-        <span class="mode-tip" id="srcTip"></span>
-      </div>
-      <div class="source-bar">
-        <span>章节：</span>
-        <span id="chapterChips" class="chips-inline"></span>
-        <span class="mode-tip" id="chapterTip"></span>
-      </div>
-      <div class="mode-bar">
-        <span class="mode-label">模式：</span>
-        <button class="chip active" data-mode="seq">顺序</button>
-        <button class="chip" data-mode="rand">随机</button>
-        <span class="mode-tip" id="modeTip"></span>
+
+      <!-- M8：筛选面板（默认收起；点开后在面板里逐层选 练习源/题型/章节/模式） -->
+      <div id="filterPanel" class="filter-panel" hidden>
+        <div class="fp-group">
+          <span class="fp-label">题型</span>
+          <button class="chip active" data-ftype="single">单选</button>
+          <button class="chip active" data-ftype="multiple">多选</button>
+          <button class="chip active" data-ftype="judge">判断</button>
+          <button class="chip active" data-ftype="fill">填空</button>
+          <span class="mode-tip">点掉某类 = 练习中排除该类（如只留单选）；至少保留一类</span>
+        </div>
+        <div class="fp-group">
+          <span class="fp-label">练习源</span>
+          <button class="chip active" data-src="all">本库全部</button>
+          <button class="chip" data-src="wrong">错题重练 <b class="cnt" id="srcWrongCount">0</b></button>
+          <button class="chip" data-src="star">我的收藏 <b class="cnt" id="srcStarCount">0</b></button>
+          <span class="mode-tip" id="srcTip"></span>
+        </div>
+        <div class="fp-group">
+          <span class="fp-label">章节</span>
+          <span id="chapterChips" class="chips-inline"></span>
+          <span class="mode-tip" id="chapterTip"></span>
+        </div>
+        <div class="fp-group">
+          <span class="fp-label">模式</span>
+          <button class="chip active" data-mode="seq">顺序</button>
+          <button class="chip" data-mode="rand">随机</button>
+          <span class="mode-tip" id="modeTip"></span>
+        </div>
+        <div class="fp-actions">
+          <button id="btnFilterClose" class="btn btn-xs" type="button">完成</button>
+        </div>
       </div>
       <div class="question-card">
         <div class="q-head">
@@ -93,8 +106,12 @@
           <button id="btnNext" class="btn btn-primary">下一题 →</button>
         </div>
       </div>
-      <div class="sheet-wrap">
-        <div class="sheet-title" id="sheetTitle">答题卡（绿=对 红=错 灰=未答 点击跳转）</div>
+      <!-- M8：答题卡整块可收起（默认收起；顶部"答题卡"按钮或卡内"收起"开合） -->
+      <div class="sheet-wrap" id="sheetWrap" hidden>
+        <div class="sheet-head">
+          <span class="sheet-title" id="sheetTitle">答题卡（绿=对 红=错 灰=未答 点击跳转）</span>
+          <button id="btnSheetClose" class="btn btn-xs btn-ghost" type="button">收起 ▾</button>
+        </div>
         <div id="answerSheet" class="answer-sheet"></div>
       </div>
     </section>
@@ -258,7 +275,7 @@
         </div>
         <div class="form-row">
           <label class="file-btn btn">📂 载入文件（.txt/.csv/.json/.docx）
-            <input id="impFile" type="file" accept=".txt,.csv,.json,.docx,.doc,text/plain,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+            <input id="impFile" type="file" accept=".txt,.csv,.json,.docx,.doc,text/plain,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document" tabindex="-1" aria-hidden="true">
           </label>
           <button id="btnFillSample" class="btn">填入示例</button>
           <button id="btnParse" class="btn btn-primary">解析预览</button>
@@ -271,15 +288,31 @@
       </div>
     </section>
 
-    <!-- ========== 设置视图（备份/恢复 + 云同步） ========== -->
+    <!-- ========== 设置视图（外观/刷题习惯 + 备份/恢复 + 云同步） ========== -->
     <section id="view-settings" class="hidden">
       <div class="import-card">
+        <div class="exam-title">🎨 外观与刷题习惯</div>
+        <div class="form-row" style="align-items:flex-start">
+          <label style="padding-top:6px">配色：</label>
+          <div class="theme-swatches" id="themeSwatches" role="radiogroup" aria-label="配色主题">
+            <button type="button" class="theme-swatch" data-theme="default" role="radio" aria-checked="true"><i class="sw-default"></i><span>默认青蓝</span></button>
+            <button type="button" class="theme-swatch" data-theme="green" role="radio" aria-checked="false"><i class="sw-green"></i><span>护眼绿</span></button>
+            <button type="button" class="theme-swatch" data-theme="paper" role="radio" aria-checked="false"><i class="sw-paper"></i><span>暖米纸张</span></button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="switch-row"><input type="checkbox" id="optAutoNext" checked> <span>答对自动下一题（约 0.6 秒）</span></label>
+        </div>
+        <div class="form-note">配色立即生效并记住在本机。自动下一题仅在「刷题」模式生效：答对约 0.6 秒后自动切下一题，答错停留看正确答案/解析；模拟考试不受影响（交卷才判分）。</div>
+      </div>
+
+      <div class="import-card" style="margin-top:12px">
         <div class="exam-title">💾 备份 / 恢复</div>
         <div id="bakInfo" class="form-note">—</div>
         <div class="form-row">
           <button id="btnExportBak" class="btn btn-primary">⬇ 导出备份（JSON 快照）</button>
           <label class="file-btn btn">⬆ 从备份文件恢复
-            <input id="bakFile" type="file" accept=".json,application/json" hidden>
+            <input id="bakFile" type="file" accept=".json,application/json" tabindex="-1" aria-hidden="true">
           </label>
         </div>
         <div class="form-note">备份文件包含全部题库/题目/错题/收藏/历史，可下载保存或复制到其它设备。

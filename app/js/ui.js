@@ -61,6 +61,13 @@
   const starScope = { cur: 'all' };     // 收藏页签范围 'bank' | 'all'
   let lastQid = null;                   // M7：上一道渲染的题目 id（用于切换题目时播放入场动画）
 
+  /* M8：答对自动下一题 定时器 + 本机偏好（主题/自动下一题，存 settings，见设置页） */
+  let autoNextTimer = null;
+  const prefs = { theme: 'default', autoNext: true };
+  const THEME_COLORS = { default: '#2563eb', green: '#15803d', paper: '#b45309' };
+  const THEME_NAMES = { default: '默认青蓝', green: '护眼绿', paper: '暖米纸张' };
+  const AUTO_NEXT_DELAY = 600;          // 答对后自动跳下一题的延迟（毫秒）
+
   /* ============ 供其它模块调用 ============ */
   KSB.uiHooks = {};
   /* 外部（如模拟考试交卷）新增错题后调用，刷新本模块错题缓存 */
@@ -103,7 +110,115 @@
     const bankId = await KSB.seedSample();
     await bindEvents();
     await KSB.notifyBankDataChanged(bankId);
+    await loadPrefs();
     showTab('practice');
+  }
+
+  /* M8：读取并应用本机偏好（配色主题 + 答对自动下一题开关） */
+  async function loadPrefs() {
+    try {
+      const t = await KSB.getSetting('theme');
+      if (t && THEME_COLORS[t]) prefs.theme = t;
+      const an = await KSB.getSetting('autoNext');
+      prefs.autoNext = an !== false;     // 默认开启
+    } catch (e) { /* 读取失败保持默认 */ }
+    applyTheme(prefs.theme);
+    syncPrefControls();
+  }
+
+  function applyTheme(name) {
+    if (!THEME_COLORS[name]) return;
+    prefs.theme = name;
+    document.documentElement.dataset.theme = name;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = THEME_COLORS[name];
+  }
+
+  async function pickTheme(name) {
+    if (!THEME_COLORS[name]) return;
+    applyTheme(name);
+    syncPrefControls();
+    KSB.toast('已切换为「' + (THEME_NAMES[name] || name) + '」配色', 'ok');
+    try { await KSB.setSetting('theme', name); } catch (e) { /* 持久化失败不影响本次 */ }
+  }
+
+  async function setAutoNextPref(on) {
+    prefs.autoNext = !!on;
+    KSB.toast(on ? '答对将自动跳下一题' : '已关闭自动下一题（答对停留）', '');
+    try { await KSB.setSetting('autoNext', prefs.autoNext); } catch (e) { /* 同上 */ }
+  }
+
+  function syncPrefControls() {
+    $$('#themeSwatches .theme-swatch').forEach(b => {
+      const on = b.dataset.theme === prefs.theme;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    const cb = $('#optAutoNext');
+    if (cb) cb.checked = !!prefs.autoNext;
+  }
+
+  /* M8：刷题页一行入口 —— 筛选面板开合 */
+  function setFilterPanel(open) {
+    const p = $('#filterPanel'), b = $('#btnFilterToggle');
+    if (!p || !b) return;
+    p.hidden = !open;
+    b.classList.toggle('active', open);
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  /* M8：答题卡整块开合（默认收起，节省垂直空间） */
+  function setSheet(open, opts) {
+    const w = $('#sheetWrap'), b = $('#btnSheetToggle');
+    if (!w || !b) return;
+    w.hidden = !open;
+    b.classList.toggle('active', open);
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open && opts && opts.scroll) {
+      requestAnimationFrame(() => { w.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    }
+  }
+
+  /* M8：切题后自动回到题目顶部（视口停在题目卡上沿附近，无需手动上拉） */
+  function scrollToQuestion() {
+    const card = $('#view-practice .question-card');
+    if (!card) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const tb = document.querySelector('.topbar');
+    const headH = tb ? tb.offsetHeight + 12 : 12;   // 吸顶顶栏之下留一点白
+    const r = card.getBoundingClientRect();
+    if (r.top < headH - 2) {
+      // 题目上沿已在视口上方/被顶栏遮住 → 上拉回题目开头
+      window.scrollBy({ top: r.top - headH, behavior: 'smooth' });
+    } else if (r.top > document.documentElement.clientHeight * 0.55) {
+      // 题目卡整体在视口下半部 → 下移让题目从顶部开始看
+      window.scrollBy({ top: r.top - headH, behavior: 'smooth' });
+    }
+    // 其它情况题目已在上部可读区，不打扰
+  }
+
+  /* M8：答对自动下一题 —— 在 answerSheet 判对后调度一次延时跳题；
+     用户手动换题/切会话会把旧定时器取消，定时器触发时也会复核条件 */
+  function maybeAutoNext() {
+    if (!prefs.autoNext) return;
+    const q = cur();
+    const a = q && session.answers.get(q.id);
+    if (!q || !a || a.state !== 'correct') return;
+    if (session.idx + 1 >= session.questions.length) return;   // 最后一题：停留展示完成提示
+    cancelAutoNext();
+    const fromIdx = session.idx;
+    autoNextTimer = setTimeout(() => {
+      autoNextTimer = null;
+      if (!prefs.autoNext || session.idx !== fromIdx) return;
+      const c = cur();
+      const ac = c && session.answers.get(c.id);
+      if (c && ac && ac.state === 'correct' && session.idx + 1 < session.questions.length) {
+        goto(session.idx + 1);
+      }
+    }, AUTO_NEXT_DELAY);
+  }
+
+  function cancelAutoNext() {
+    if (autoNextTimer != null) { clearTimeout(autoNextTimer); autoNextTimer = null; }
   }
 
   function bindEvents() {
@@ -249,6 +364,16 @@
       await startSession(id);
       showTab('practice');
     };
+
+    // M8：刷题页一行入口 —— 筛选面板 / 答题卡 开合
+    $('#btnFilterToggle').addEventListener('click', () => setFilterPanel($('#filterPanel').hidden));
+    $('#btnFilterClose').addEventListener('click', () => setFilterPanel(false));
+    $('#btnSheetToggle').addEventListener('click', () => setSheet(true, { scroll: true }));
+    $('#btnSheetClose').addEventListener('click', () => setSheet(false));
+
+    // M8：外观与刷题习惯（设置页）
+    $$('#themeSwatches .theme-swatch').forEach(b => b.addEventListener('click', () => pickTheme(b.dataset.theme)));
+    $('#optAutoNext').addEventListener('change', e => setAutoNextPref(e.target.checked));
   }
 
   /* 练习某题库中的指定题目：切库 → 定位该题（source 过滤可选，如 star） */
@@ -284,6 +409,7 @@
   }
 
   async function startSession(bankId, opts) {
+    cancelAutoNext();   // M8：会话重建时取消待触发的自动下一题
     const keepMode = opts && opts.keepMode;
     const source = (opts && opts.source) || 'all';
     const bankChanged = bankId !== session.bankId;
@@ -355,6 +481,24 @@
     const st = $('#srcTip');
     st.textContent = session.source === 'wrong' ? '正在重练错题（答对不会自动移除，去错题本手动标记）'
       : session.source === 'star' ? '正在练收藏题' : '';
+    syncFilterSummary();
+  }
+
+  /* M8：顶部一行入口里的当前筛选摘要（省略号截断） */
+  function syncFilterSummary() {
+    const el = $('#filterSummary');
+    if (!el) return;
+    const typeLabel = { single: '单选', multiple: '多选', judge: '判断', fill: '填空' };
+    const active = ['single', 'multiple', 'judge', 'fill']
+      .filter(t => !session.excluded.has(t)).map(t => typeLabel[t]);
+    const parts = [
+      SOURCE_LABEL[session.source] || '本库全部',
+      active.length === 4 ? '全题型' : active.join('+'),
+      session.mode === 'rand' ? '随机' : '顺序',
+      session.chapter || '全章节'
+    ];
+    el.textContent = parts.join(' · ');
+    el.title = el.textContent;
   }
 
   /* 章节 chips：全部 + 各章节（基于当前会话过滤前的题型全集） */
@@ -630,6 +774,8 @@
       renderWrongIfVisible();
       await refreshSourceChips();
     }
+    // M8：判对 → 延时自动下一题（答错停留看答案/解析）
+    if (res.state === 'correct') maybeAutoNext();
   }
 
   /* ============ 统计与答题卡 ============ */
@@ -647,6 +793,8 @@
     $('#statWrong').textContent = wrong;
     $('#statRate').textContent = rate;
     $('#progressBar').style.width = (total ? doneCount / total * 100 : 0) + '%';
+    const sc = $('#sheetCount');
+    if (sc) sc.textContent = doneCount + '/' + total;
 
     const last = total > 0 && session.idx === total - 1 && doneCount === total;
     const tip = $('#doneTip');
@@ -679,9 +827,10 @@
 
   function goto(i) {
     if (i < 0 || i >= session.questions.length) return;
+    cancelAutoNext();   // M8：手动切题时取消待触发的自动下一题
     session.idx = i;
     renderAll();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToQuestion(); // M8：切题后自动回到题目顶部（原为整页滚到最顶）
   }
 
   /* ============ 错题本（当前库 / 全库） ============ */
@@ -845,6 +994,7 @@
     if (name === 'import' && KSB.importer && typeof KSB.importer.refreshTargetList === 'function') KSB.importer.refreshTargetList();
     if (name === 'settings' && KSB.backup && typeof KSB.backup.onShow === 'function') KSB.backup.onShow();
     if (name === 'settings' && KSB.sync && typeof KSB.sync.onShow === 'function') KSB.sync.onShow();
+    if (name === 'settings') syncPrefControls();   // M8：同步主题/开关的当前选中态
     window.scrollTo({ top: 0 });
   }
 
