@@ -374,6 +374,11 @@
   function parseFromSource() {
     const res = parse(fmt, el('impSource').value);
     pending = { questions: res.questions, bankName: res.bankName };
+    // JSON 题库自带库名（bank.name）→ 新建题库时自动填入，实现"一键导入"
+    if (res.bankName) {
+      const ni = el('impNewName');
+      if (ni && !ni.value.trim()) ni.value = res.bankName;
+    }
     renderResult(res);
     return res;
   }
