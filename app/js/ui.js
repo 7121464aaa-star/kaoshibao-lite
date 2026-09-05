@@ -14,6 +14,14 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
 
+  /* 动效重放：移除→强制重排→添加，保证同一节点也能重播 CSS 动画（M7） */
+  KSB.fxPlay = function (el, cls) {
+    if (!el || !el.classList) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  };
+
   /* 轻提示 */
   let toastTimer = null;
   KSB.toast = function (msg, type) {
@@ -51,6 +59,7 @@
   const wrongCache = new Map();
   const wrongScope = { cur: 'bank' };   // 错题本视图范围 'bank' | 'all'
   const starScope = { cur: 'all' };     // 收藏页签范围 'bank' | 'all'
+  let lastQid = null;                   // M7：上一道渲染的题目 id（用于切换题目时播放入场动画）
 
   /* ============ 供其它模块调用 ============ */
   KSB.uiHooks = {};
@@ -439,6 +448,7 @@
       $('#feedback').hidden = true;
       $('#btnStar').textContent = '☆';
       $('#btnStar').classList.remove('on');
+      lastQid = null;
       return;
     }
     meta.textContent = (session.idx + 1) + ' / ' + total + ' · ' + (KSB.TYPES[q.type] || q.type)
@@ -452,6 +462,13 @@
     box.dataset.qid = q.id;
     box.dataset.locked = done ? '1' : '0';
     box.classList.remove('locked');
+
+    /* M7：真正切到另一道题时，题干与选项做一次柔和入场（同题重渲染不打扰） */
+    if (q.id !== lastQid) {
+      lastQid = q.id;
+      KSB.fxPlay($('#qStem'), 'fx-rise');
+      KSB.fxPlay(box, 'fx-rise');
+    }
 
     if (q.type === 'short') { return; } // 轻量版不支持简答（题库已过滤）
 
@@ -816,6 +833,8 @@
     $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     ['practice', 'exam', 'wrong', 'stars', 'search', 'stats', 'banks', 'import', 'settings'].forEach(v =>
       $('#view-' + v).classList.toggle('hidden', v !== name));
+    const shown = $('#view-' + name);
+    if (shown) KSB.fxPlay(shown, 'fx-view');
     if (name === 'practice') { renderAll(); refreshSourceChips(); }
     if (name === 'exam' && KSB.exam && typeof KSB.exam.onShow === 'function') KSB.exam.onShow();
     if (name === 'wrong') renderWrong();

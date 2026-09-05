@@ -409,3 +409,204 @@ main { max-width: 860px; margin: 0 auto; padding: 14px; }
   #synUser, #synToken, #synGist { flex-basis: 100%; }
 }
 
+/* ============ M7 追加样式（2026-09-05）：丝滑刷题 + 渐变动效 + 手机端精简 ============ */
+:root {
+  --grad-primary: linear-gradient(135deg, #2563eb 0%, #3b82f6 52%, #06b6d4 135%);
+  --grad-brand: linear-gradient(120deg, #1d4ed8, #0ea5e9 55%, #7c3aed);
+  --ring-blue: rgba(37, 99, 235, .18);
+  --ease-out: cubic-bezier(.22, .61, .36, 1);
+}
+
+/* ---------- 全局氛围与动效基调 ---------- */
+html { scroll-behavior: smooth; }
+body {
+  background:
+    radial-gradient(1100px 420px at 88% -12%, rgba(14, 165, 233, .09), transparent 60%),
+    radial-gradient(900px 400px at -12% 2%, rgba(124, 58, 237, .07), transparent 55%),
+    var(--bg);
+  -webkit-tap-highlight-color: transparent;
+}
+button { -webkit-tap-highlight-color: transparent; }
+
+/* 顶栏：底部一条渐变细线，取代死板灰边 */
+.topbar {
+  border-bottom: 1px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(90deg, rgba(37, 99, 235, .6), rgba(14, 165, 233, .32), rgba(124, 58, 237, .5)) border-box;
+}
+
+/* 品牌字：渐变 + 缓慢流动 */
+.brand { display: flex; align-items: baseline; gap: 7px; }
+.brand-emoji { font-size: 18px; }
+.brand-grad {
+  font-weight: 800; letter-spacing: .2px;
+  background-image: var(--grad-brand);
+  background-size: 220% auto;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: gradShift 8s ease-in-out infinite alternate;
+}
+@keyframes gradShift { to { background-position: 100% center; } }
+.m0-tag {
+  color: #fff; border: none; vertical-align: 2px;
+  background-image: var(--grad-primary);
+  box-shadow: 0 2px 6px -2px rgba(37, 99, 235, .5);
+  padding: 1px 7px;
+}
+
+/* ---------- Tab：胶囊渐变激活态 ---------- */
+.tabs { gap: 8px; }
+.tab {
+  border-radius: 99px; padding: 7px 16px; font-size: 14.5px;
+  transition: color .18s, background-color .2s, border-color .2s,
+              box-shadow .2s var(--ease-out), transform .14s var(--ease-out);
+}
+.tab:hover { color: var(--primary); }
+.tab.active {
+  color: #fff; font-weight: 600;
+  background-image: var(--grad-primary); border-color: transparent;
+  box-shadow: 0 5px 14px -7px rgba(37, 99, 235, .6);
+}
+.tab.active:hover { color: #fff; }
+.tab:active { transform: scale(.94); }
+.tab:focus-visible, .btn:focus-visible, .chip:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+
+/* ---------- 按钮 / 筛选 chip：按压反馈 + 渐变主色 ---------- */
+.btn {
+  border-radius: 11px;
+  transition: transform .14s var(--ease-out), box-shadow .22s,
+              background-color .2s, border-color .2s, filter .14s;
+}
+.btn-primary {
+  background-image: var(--grad-primary); border-color: transparent; color: #fff;
+  box-shadow: 0 8px 18px -10px rgba(37, 99, 235, .65);
+}
+.btn-primary:hover { background-image: var(--grad-primary); filter: brightness(1.05); }
+.btn:active, .chip:active { transform: scale(.95); }
+.chip {
+  transition: transform .14s var(--ease-out), background-color .2s,
+              border-color .2s, color .2s, box-shadow .22s;
+}
+.chip.active {
+  background-image: var(--grad-primary); border-color: transparent; color: #fff;
+  box-shadow: 0 4px 12px -6px rgba(37, 99, 235, .55);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary:hover { box-shadow: 0 12px 24px -12px rgba(37, 99, 235, .7); }
+  .chip:hover { transform: translateY(-1px); }
+}
+
+/* ---------- 统计条与进度 ---------- */
+.progress { height: 8px; }
+.progress-bar {
+  background-image: var(--grad-primary);
+  box-shadow: 0 0 8px rgba(37, 99, 235, .4);
+  transition: width .5s var(--ease-out);
+  position: relative; overflow: hidden;
+}
+.progress-bar::after {
+  content: ''; position: absolute; inset: 0; border-radius: 99px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 2.6s var(--ease-out) infinite;
+}
+@keyframes shimmer { 55%, 100% { transform: translateX(100%); } }
+
+/* ---------- 题目卡与选项：入场/判分动效 ---------- */
+.question-card { border-radius: 18px; }
+.q-stem { font-size: 17px; line-height: 1.7; }
+.opt {
+  border-radius: 14px; padding: 12px 14px;
+  transition: transform .16s var(--ease-out), border-color .2s,
+              background-color .2s, box-shadow .22s;
+}
+.opt:hover { border-color: var(--primary); box-shadow: 0 5px 16px -10px var(--ring-blue); }
+.opt:active { transform: scale(.985); }
+.opt-correct { animation: popOk .34s var(--ease-out); }
+.opt-wrong { animation: shakeX .38s ease; }
+@keyframes popOk {
+  0% { transform: scale(.95); }
+  55% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  45% { transform: translateX(4px); }
+  70% { transform: translateX(-2px); }
+}
+
+/* ---------- 判分反馈 / 完成提示 / 浮层：柔和浮现 ---------- */
+.feedback { border-radius: 13px; animation: fbIn .3s var(--ease-out); }
+.fb-correct { background: linear-gradient(135deg, #ecfdf5, #f0fdfa); border-color: #bbf7d0; }
+.fb-wrong { background: linear-gradient(135deg, #fef2f2, #fff1f2); border-color: #fecaca; }
+.done-tip { border-radius: 14px; animation: fbIn .36s var(--ease-out); }
+.toast { animation: toastIn .26s var(--ease-out); }
+@keyframes fbIn { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---------- 列表卡片入场（错题/收藏/考试结果/题库/统计） ---------- */
+.wrong-card, .exr-card, .bank-card, .stat-card { animation: cardIn .32s var(--ease-out) both; }
+@keyframes cardIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ---------- 答题卡格子：轻交互 ---------- */
+.sheet-cell {
+  border-radius: 10px;
+  transition: transform .12s var(--ease-out), background-color .2s, border-color .2s, color .2s;
+}
+.sheet-cell:active { transform: scale(.88); }
+@media (hover: hover) and (pointer: fine) {
+  .sheet-cell:hover { transform: translateY(-1px); }
+}
+
+/* ---------- 由 JS 触发的过渡类（fxPlay） ---------- */
+.fx-rise { animation: cardIn .28s var(--ease-out); }
+.fx-view { animation: viewIn .3s var(--ease-out); }
+@keyframes viewIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* ---------- 手机端精简（≤520px） ---------- */
+@media (max-width: 520px) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  /* Tab 单行横滑：干净不换行堆叠 */
+  .tabs {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; gap: 6px; margin: 10px auto 0; padding: 2px 10px 8px;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; padding: 8px 14px; font-size: 14px; }
+  /* 精简刷题视图：隐藏灰字提示，减少噪点；筛选行收紧 */
+  #view-practice .mode-tip { display: none; }
+  .source-bar { margin-bottom: 6px; }
+  .source-bar > span:first-child { font-size: 12px; }
+  .chip { padding: 6px 12px; }
+  .question-card { padding: 15px; border-radius: 16px; }
+  .q-stem { font-size: 16px; }
+  .q-meta { font-size: 12px; }
+  .opt { padding: 13px 14px; font-size: 15.5px; border-radius: 13px; }
+  .fill-input { padding: 12px; font-size: 16px; }
+  .nav-row .btn { padding: 12px 6px; font-size: 15px; border-radius: 12px; }
+  .btn-star { padding: 6px; margin: -6px -4px -6px 0; font-size: 22px; }
+  .sheet-wrap { padding: 12px; border-radius: 16px; }
+  .sheet-cell { width: 36px; height: 36px; }
+  .bank-row { width: 100%; }
+  #bankSelect { flex: 1 1 150px; max-width: none; min-width: 130px; }
+  #btnReset { padding: 6px 10px; }
+  .statsbar { margin-top: 8px; }
+  .footer { margin: 14px auto 22px; }
+  .import-card, .exam-card, .stat-block { border-radius: 16px; }
+}
+
+/* ---------- 尊重系统"减弱动态效果" ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  html { scroll-behavior: auto; }
+}
+

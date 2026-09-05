@@ -23,6 +23,7 @@
     finished: false,
     lastCfg: null
   };
+  let lastExQid = null; // M7：上一道渲染的题目 id（切换题目时播放入场动画，同题重渲染不打扰）
 
   /* ============ 配置 ============ */
   async function onShow() {
@@ -148,11 +149,18 @@
     const q = cur();
     const total = state.questions.length;
     const box = $('#exOptions');
-    if (!q) { $('#exMeta').textContent = ''; $('#exStem').textContent = ''; box.innerHTML = ''; return; }
+    if (!q) { $('#exMeta').textContent = ''; $('#exStem').textContent = ''; box.innerHTML = ''; lastExQid = null; return; }
     $('#exMeta').textContent = (state.idx + 1) + ' / ' + total + ' · ' + (KSB.TYPES[q.type] || q.type)
       + (q.chapter ? ' · ' + q.chapter : '');
     $('#exStem').textContent = q.stem;
     box.dataset.qid = q.id;
+    if (q.id !== lastExQid) {
+      lastExQid = q.id;
+      if (typeof KSB.fxPlay === 'function') {
+        KSB.fxPlay($('#exStem'), 'fx-rise');
+        KSB.fxPlay(box, 'fx-rise');
+      }
+    }
     const ans = state.answers.get(q.id);
     let html = '';
 
