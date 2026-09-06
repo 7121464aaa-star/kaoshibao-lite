@@ -103,3 +103,15 @@
   KSB.stats = { render };
   bindUI();
 })();
+
+/* M13：隐藏操作成功/状态切换类轻提示，避免绿色/黑色 toast 挡住刷题内容。
+   仅保留 bad 类型的错误/限制提示；确认框等真正需要用户决策的弹窗不受影响。 */
+(function () {
+  'use strict';
+  const KSB = window.KSB = window.KSB || {};
+  const rawToast = KSB.toast;
+  if (typeof rawToast !== 'function') return;
+  KSB.toast = function (msg, type) {
+    if (type === 'bad') rawToast(msg, type);
+  };
+})();
