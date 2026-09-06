@@ -17,7 +17,7 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M11</span></div>
+      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M12</span></div>
       <div class="bank-row">
         <select id="bankSelect" title="当前题库"></select>
         <button id="btnReset" class="btn btn-ghost" title="清空本次作答，重新开始">重新开始</button>
@@ -87,6 +87,24 @@
           <button class="chip" data-mode="rand">随机</button>
           <span class="mode-tip" id="modeTip"></span>
         </div>
+        <!-- M12：随机组题 —— 像考试但不是考试：按题型配数量随机抽一小组，然后按普通刷题来（即时对错+答题卡同步） -->
+        <div class="fp-group fp-compose">
+          <span class="fp-label">随机组题</span>
+          <div class="compose-box">
+            <div class="compose-rows" id="composeRows"></div>
+            <div class="compose-presets">
+              <span class="mode-tip">快捷：</span>
+              <button class="chip" data-cq="10" type="button">10 题</button>
+              <button class="chip" data-cq="20" type="button">20 题</button>
+              <button class="chip" data-cq="30" type="button">30 题</button>
+              <button class="chip" data-cq="0" type="button">清零</button>
+            </div>
+            <div class="compose-foot">
+              <button id="btnStartCompose" class="btn btn-primary" type="button">🎲 随机抽这组来刷</button>
+              <span class="mode-tip" id="composeTip">想全单选就只给单选填数；点快捷按现有题量均分到各题型。开始后按普通刷题：即时对错、答题卡同步、做完可再来一组。</span>
+            </div>
+          </div>
+        </div>
         <div class="fp-actions">
           <button id="btnFilterClose" class="btn btn-xs" type="button">完成</button>
         </div>
@@ -101,7 +119,7 @@
         <div id="feedback" class="feedback" hidden></div>
         <div id="doneTip" class="done-tip" hidden>
           <div id="doneText"></div>
-          <button class="btn btn-primary" onclick="document.getElementById('btnReset').click()">再来一遍</button>
+          <button id="btnDoneAgain" class="btn btn-primary" onclick="document.getElementById('btnReset').click()">再来一遍</button>
         </div>
         <div class="nav-row">
           <button id="btnPrev" class="btn">← 上一题</button>

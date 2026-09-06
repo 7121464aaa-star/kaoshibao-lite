@@ -918,5 +918,43 @@ html[data-mode="moon"] .shade-seg .shade-btn.active::before { box-shadow: inset 
 .fb-reveal { background: var(--tint); border-color: var(--tint-border); }
 .fb-reveal .fb-state { color: var(--primary); }
 
+/* ============ M12 追加样式：随机组题（像考试但不是考试） ============
+   筛选面板内：各题型一行「名称 − 数量 ＋ 可抽N」，快捷 10/20/30/清零，底部开始按钮。 */
+.fp-compose { flex-direction: column; align-items: stretch; gap: 2px; }
+.fp-compose .fp-label { width: auto; padding-top: 8px; }
+.compose-box { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 4px; }
+.compose-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 6px 14px; }
+.cmp-row { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.cmp-name { flex: 0 0 auto; width: 46px; color: var(--text); }
+.cmp-ctrl { display: inline-flex; align-items: center; gap: 4px; }
+.cmp-btn {
+  width: 27px; height: 27px; padding: 0; font-size: 17px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--field);
+  color: var(--primary); cursor: pointer; user-select: none;
+  transition: transform .12s var(--ease-out);
+}
+.cmp-btn:active { transform: scale(.88); }
+.cmp-num {
+  width: 48px; text-align: center; font: inherit; font-size: 14.5px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 3px 2px;
+  background: var(--field); color: var(--text); -moz-appearance: textfield;
+}
+.cmp-num::-webkit-outer-spin-button, .cmp-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cmp-num:focus { outline: 2px solid var(--primary); border-color: transparent; }
+.cmp-have { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.cmp-have.empty { color: var(--wrong); }
+.compose-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.compose-presets .mode-tip { margin-right: 2px; }
+.compose-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.compose-foot .btn { flex: 0 0 auto; }
+.compose-foot .mode-tip { flex: 1 1 100%; }
+@media (max-width: 520px) {
+  .compose-rows { grid-template-columns: 1fr; gap: 5px; }
+  .cmp-row { font-size: 14px; }
+  .cmp-btn { width: 30px; height: 30px; }
+  .cmp-num { width: 52px; font-size: 15px; }
+}
+
 
 

@@ -38,8 +38,12 @@
     { val: true, label: '正确' },
     { val: false, label: '错误' }
   ];
-  const SOURCE_LABEL = { all: '本库全部', wrong: '错题重练', star: '我的收藏' };
+  const SOURCE_LABEL = { all: '本库全部', wrong: '错题重练', star: '我的收藏', custom: '随机组题' };
   const SUPPORTED_TYPES = new Set(['single', 'multiple', 'judge', 'fill']);
+  /* M12：随机组题 —— 四题型固定展示顺序与中文名（含摘要/历史标签复用） */
+  const TYPE_LABEL = { single: '单选', multiple: '多选', judge: '判断', fill: '填空' };
+  const COMPOSE_TYPES = ['single', 'multiple', 'judge', 'fill'];
+  const emptyCounts = () => ({ single: 0, multiple: 0, judge: 0, fill: 0 });
 
   const session = {
     bankId: null,
@@ -54,12 +58,15 @@
     drafts: new Map(),  // qid -> 草稿（多选勾选/填空输入未提交判分 → 答题卡"待判"）
     startedAt: null,
     committed: true,
-    touched: 0         // M10：本轮实际作答次数（筛选内保留痕迹时，防止"全从旧痕迹继承"也被当成新完成一轮）
+    touched: 0,        // M10：本轮实际作答次数（筛选内保留痕迹时，防止"全从旧痕迹继承"也被当成新完成一轮）
+    custom: null       // M12：随机组题配置快照 { counts }；仅组题会话存在，任何常规会话重建/换库即置空
   };
 
   const wrongCache = new Map();
   const wrongScope = { cur: 'bank' };   // 错题本视图范围 'bank' | 'all'
   const starScope = { cur: 'all' };     // 收藏页签范围 'bank' | 'all'
+  /* M12：随机组题配置（面板里各题型想抽几道）与当前题库各题型的可抽数量 */
+  const compose = { counts: emptyCounts(), avail: emptyCounts() };
   let lastQid = null;                   // M7：上一道渲染的题目 id（用于切换题目时播放入场动画）
 
   /* M8：答对自动下一题 定时器 + 本机偏好（主题/自动下一题，存 settings，见设置页）
@@ -258,13 +265,14 @@
     }
   }
 
-  /* M8：刷题页一行入口 —— 筛选面板开合 */
+  /* M8：刷题页一行入口 —— 筛选面板开合（M12：打开时顺带刷新"随机组题"的可抽数量/回填） */
   function setFilterPanel(open) {
     const p = $('#filterPanel'), b = $('#btnFilterToggle');
     if (!p || !b) return;
     p.hidden = !open;
     b.classList.toggle('active', open);
     b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) refreshComposeInfo();   // M12：异步刷新可抽数量（不 await，避免卡面板）
   }
 
   /* M8：答题卡整块开合（默认收起，节省垂直空间） */
@@ -323,7 +331,16 @@
 
   function bindEvents() {
     $('#bankSelect').addEventListener('change', e => startSession(e.target.value));
-    $('#btnReset').addEventListener('click', () => {
+    $('#btnReset').addEventListener('click', async () => {
+      // M12：正在刷"随机组题"时，顶栏"重新开始"= 重抽一组同配置的随机题（确认后先清空作答再重抽）
+      if (session.custom) {
+        if ((session.answers.size || session.drafts.size) && !confirm('重抽一组同配置的随机题（清空当前作答记录）？')) return;
+        await commitHistory();
+        session.answers.clear();
+        session.drafts.clear();
+        startComposeSet(session.custom.counts);
+        return;
+      }
       if ((session.answers.size || session.drafts.size) && !confirm('重新开始本套练习（清空当前作答记录）？')) return;
       startSession(session.bankId, { keepMode: true, source: session.source });
     });
@@ -368,6 +385,33 @@
       session.mode = mode;
       startSession(session.bankId, { keepMode: true, source: session.source, keepTraces: true });
     }));
+
+    // M12：随机组题 —— 面板内步进按钮 / 数量直改 / 快捷 10·20·30·清零 / 开始抽这组
+    $('#composeRows').addEventListener('click', e => {
+      const btn = e.target.closest('.cmp-btn');
+      if (!btn) return;
+      const t = btn.dataset.type;
+      const inp = document.querySelector('.cmp-num[data-type="' + t + '"]');
+      if (!inp) return;
+      const cap = compose.avail[t] > 0 ? compose.avail[t] : 9999;
+      let v = parseInt(inp.value, 10); if (isNaN(v)) v = 0;
+      v = btn.dataset.act === 'inc' ? v + 1 : v - 1;
+      v = Math.max(0, Math.min(v, cap));
+      inp.value = v;
+      refreshComposeSummary();
+    });
+    $('#composeRows').addEventListener('input', e => {
+      const inp = e.target.closest('.cmp-num');
+      if (!inp) return;
+      const t = inp.dataset.type;
+      const cap = compose.avail[t] > 0 ? compose.avail[t] : 9999;
+      let v = parseInt(inp.value, 10); if (isNaN(v) || v < 0) v = 0;
+      if (v > cap) v = cap;
+      inp.value = v;
+      refreshComposeSummary();
+    });
+    $$('#view-practice .compose-presets .chip[data-cq]').forEach(c => c.addEventListener('click', () => applyComposePreset(parseInt(c.dataset.cq, 10) || 0)));
+    $('#btnStartCompose').addEventListener('click', () => startComposeSet());
 
     // 错题本范围 chips
     $$('#view-wrong .chip[data-wscope]').forEach(c => c.addEventListener('click', () => {
@@ -513,8 +557,153 @@
     await startSession(session.bankId, { keepMode: true, source, keepTraces: true });
   }
 
+  /* ============ M12：随机组题（像考试但不是考试） ============ */
+
+  /* 组题抽题池 = 当前题库 + 当前章节/练习源筛选；题型排除 chips 不参与（抽哪几类由下方数量决定） */
+  async function composePool() {
+    const bankId = session.bankId;
+    let qs = bankId ? await KSB.getBankQuestions(bankId) : [];
+    qs = qs.filter(q => SUPPORTED_TYPES.has(q.type));
+    if (session.chapter) qs = qs.filter(q => (q.chapter || '') === session.chapter);
+    if (session.source === 'wrong') {
+      const qids = new Set(Array.from(wrongCache.values()).filter(w => w.bankId === bankId).map(w => w.qid));
+      qs = qs.filter(q => qids.has(q.id));
+    } else if (session.source === 'star') {
+      const qids = new Set(await KSB.getStarQids(bankId));
+      qs = qs.filter(q => qids.has(q.id));
+    }
+    return qs;
+  }
+
+  /* 打开筛选面板时刷新：各题型当前可抽数量 + 重绘行 */
+  async function refreshComposeInfo() {
+    const rows = $('#composeRows');
+    if (!rows) return;
+    const pool = await composePool();
+    const av = emptyCounts();
+    pool.forEach(q => { if (av[q.type] != null) av[q.type]++; });
+    compose.avail = av;
+    renderComposeRows();
+  }
+
+  function renderComposeRows() {
+    const rows = $('#composeRows');
+    if (!rows) return;
+    rows.innerHTML = COMPOSE_TYPES.map(t =>
+      '<label class="cmp-row">' +
+        '<span class="cmp-name">' + TYPE_LABEL[t] + '</span>' +
+        '<span class="cmp-ctrl">' +
+          '<button class="cmp-btn" type="button" data-act="dec" data-type="' + t + '" aria-label="减少">−</button>' +
+          '<input class="cmp-num" data-type="' + t + '" type="number" min="0" max="9999" inputmode="numeric" value="' + compose.counts[t] + '">' +
+          '<button class="cmp-btn" type="button" data-act="inc" data-type="' + t + '" aria-label="增加">＋</button>' +
+        '</span>' +
+        '<span class="cmp-have' + (compose.avail[t] ? '' : ' empty') + '">可抽 ' + compose.avail[t] + '</span>' +
+      '</label>'
+    ).join('');
+    refreshComposeSummary();
+  }
+
+  /* 从面板输入读回各题型数量（钳制在 0..可抽数量；上限 0=当前范围无此类题） */
+  function readComposeCounts() {
+    const c = emptyCounts();
+    COMPOSE_TYPES.forEach(t => {
+      const inp = document.querySelector('.cmp-num[data-type="' + t + '"]');
+      let v = inp ? parseInt(inp.value, 10) : 0;
+      if (isNaN(v) || v < 0) v = 0;
+      const cap = compose.avail[t];
+      if (cap >= 0 && v > cap) v = cap;
+      c[t] = v;
+      if (inp) inp.value = v;
+    });
+    compose.counts = c;
+    return c;
+  }
+
+  function refreshComposeSummary() {
+    const c = readComposeCounts();
+    const total = COMPOSE_TYPES.reduce((s, t) => s + c[t], 0);
+    const tip = $('#composeTip');
+    if (!tip) return;
+    const parts = COMPOSE_TYPES.filter(t => c[t] > 0).map(t => TYPE_LABEL[t] + ' ' + c[t]);
+    tip.textContent = total > 0
+      ? '本次随机抽 ' + total + ' 题：' + parts.join('、') + '。抽到的题按普通刷题即时对错，进度与平时刷题的答题卡互通。'
+      : '想全单选就只给单选填数；点上面快捷会按当前可抽题量尽量均分到各题型。';
+  }
+
+  /* 快捷 10/20/30：把 total 尽量均分到"当前范围里有题"的题型（点 0 = 清零） */
+  async function applyComposePreset(total) {
+    const pool = await composePool();
+    const av = emptyCounts();
+    pool.forEach(q => { if (av[q.type] != null) av[q.type]++; });
+    compose.avail = av;
+    const types = COMPOSE_TYPES.filter(t => av[t] > 0);
+    const cap = types.reduce((s, t) => s + av[t], 0);
+    if (!types.length || cap <= 0) { KSB.toast('当前筛选范围内没有可抽的题', 'bad'); return; }
+    if (total <= 0) {
+      compose.counts = emptyCounts();
+      renderComposeRows();
+      return;
+    }
+    const c = emptyCounts();
+    const n = Math.min(total, cap);
+    for (let i = 0; i < n; i++) {
+      let pick = null;
+      types.forEach(t => { if (c[t] < av[t] && (pick === null || c[t] < c[pick])) pick = t; });
+      if (pick === null) break;
+      c[pick]++;
+    }
+    compose.counts = c;
+    renderComposeRows();
+    const tip = $('#composeTip');
+    if (tip) tip.textContent = '已填 ' + n + ' 题（' + types.map(t => TYPE_LABEL[t] + ' ' + c[t]).join('、') + '），可再手动加减后点「随机抽这组来刷」。';
+  }
+
+  /* 组卷开刷：按各题型数量从当前范围随机抽取（不足取全部），打乱后作为一组"随机组题"。
+     与普通刷题共用同一份作答记录：不 commitHistory、不清 answers/drafts —— 做过的题在两边答题卡都显示绿/红。 */
+  async function startComposeSet(countsArg) {
+    if (!session.bankId) { KSB.toast('请先选择题库', 'bad'); return; }
+    const counts = countsArg || readComposeCounts();
+    const total = COMPOSE_TYPES.reduce((s, t) => s + (counts[t] || 0), 0);
+    if (!total) { KSB.toast('先点 10/20/30 快捷，或给某类题型填数量', 'bad'); return; }
+    const pool = await composePool();
+    const byType = {};
+    pool.forEach(q => { (byType[q.type] || (byType[q.type] = [])).push(q); });
+    const list = [];
+    const short = [];
+    COMPOSE_TYPES.forEach(t => {
+      const n = counts[t] || 0;
+      if (!n) return;
+      const arr = byType[t] || [];
+      const take = Math.min(n, arr.length);
+      if (take < n) short.push(TYPE_LABEL[t] + '差 ' + (n - take) + ' 题');
+      if (take) list.push.apply(list, shuffle(arr).slice(0, take));
+    });
+    if (!list.length) { KSB.toast('当前筛选范围内没有可抽的题', 'bad'); return; }
+    startCustomList(shuffle(list), counts);
+    if (short.length) KSB.toast('部分题型题量不足：' + short.join('、') + '，已按现有题量抽', '');
+  }
+
+  /* 进入"随机组题"会话：只换当前题目组，作答痕迹/历史保持（进度与普通刷题互通）；
+     换库/切筛选/切源走 startSession 即回到普通列表（session.custom 已置空）。 */
+  function startCustomList(list, counts) {
+    cancelAutoNext();
+    session.questions = list;
+    session.source = 'custom';
+    session.mode = 'seq';
+    session.idx = 0;
+    session.custom = { counts: counts };
+    session.startedAt = new Date();
+    session.committed = false;
+    session.touched = 0;
+    syncChips();
+    renderAll();
+    setFilterPanel(false);
+    KSB.toast('🎲 已随机抽 ' + list.length + ' 题开始刷（进度与平时刷题互通）', 'ok');
+  }
+
   async function startSession(bankId, opts) {
     cancelAutoNext();   // M8：会话重建时取消待触发的自动下一题
+    session.custom = null;   // M12：任何常规会话重建（换库/重开/切筛选/切模式）即离开"随机组题"，回到普通列表（作答痕迹按 keepTraces 决定）
     const keepMode = opts && opts.keepMode;
     const source = (opts && opts.source) || 'all';
     const bankChanged = bankId !== session.bankId;
@@ -591,17 +780,28 @@
     tip.textContent = session.mode === 'rand' ? '随机顺序，点"重新开始"重新打乱' : '';
     const st = $('#srcTip');
     st.textContent = session.source === 'wrong' ? '正在重练错题（答对不会自动移除，去错题本手动标记）'
-      : session.source === 'star' ? '正在练收藏题' : '';
+      : session.source === 'star' ? '正在练收藏题'
+      : session.source === 'custom' ? '正在刷随机组题：进度与平时刷题互通，可在「⚙ 筛选」里切回"本库全部/错题重练/收藏"继续'
+      : '';
     syncFilterSummary();
   }
 
-  /* M8：顶部一行入口里的当前筛选摘要（省略号截断） */
+  /* M8：顶部一行入口里的当前筛选摘要（省略号截断）；M12：随机组题会话显示专属摘要 */
   function syncFilterSummary() {
     const el = $('#filterSummary');
     if (!el) return;
-    const typeLabel = { single: '单选', multiple: '多选', judge: '判断', fill: '填空' };
-    const active = ['single', 'multiple', 'judge', 'fill']
-      .filter(t => !session.excluded.has(t)).map(t => typeLabel[t]);
+    // M12：随机组题会话 —— 🎲 随机组题 N 题 · 各题型配比 · 章节
+    if (session.source === 'custom') {
+      const c = session.custom ? session.custom.counts : null;
+      const parts = ['🎲 随机组题 ' + session.questions.length + ' 题'];
+      if (c) parts.push(COMPOSE_TYPES.filter(t => c[t] > 0).map(t => TYPE_LABEL[t] + ' ' + c[t]).join('+'));
+      parts.push(session.chapter || '全章节');
+      if (prefs.showAnswer) parts.push('背题');
+      el.textContent = parts.join(' · ');
+      el.title = el.textContent;
+      return;
+    }
+    const active = COMPOSE_TYPES.filter(t => !session.excluded.has(t)).map(t => TYPE_LABEL[t]);
     const parts = [
       SOURCE_LABEL[session.source] || '本库全部',
       active.length === 4 ? '全题型' : active.join('+'),
@@ -968,7 +1168,16 @@
     const tip = $('#doneTip');
     tip.hidden = !last;
     if (last) {
-      $('#doneText').textContent = '已完成全部 ' + total + ' 题 · 答对 ' + correct + ' · 答错 ' + wrong + ' · 正确率 ' + rate;
+      // M12：随机组题完成提示（按钮"再来一组"= 重抽同配置，进度互通）
+      if (session.custom) {
+        $('#doneText').textContent = '已刷完这组随机题 ' + total + ' 题 · 答对 ' + correct + ' · 答错 ' + wrong + ' · 正确率 ' + rate + '（进度已记入平时刷题答题卡）';
+        const again = $('#btnDoneAgain');
+        if (again) again.textContent = '🎲 再来一组';
+      } else {
+        $('#doneText').textContent = '已完成全部 ' + total + ' 题 · 答对 ' + correct + ' · 答错 ' + wrong + ' · 正确率 ' + rate;
+        const again = $('#btnDoneAgain');
+        if (again) again.textContent = '再来一遍';
+      }
       if (!session.committed) commitHistory();
     }
   }

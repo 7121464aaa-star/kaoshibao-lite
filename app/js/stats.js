@@ -74,7 +74,8 @@
     } else {
       hist.innerHTML = history.slice(0, 20).map(h => {
         const typeTxt = h.type === 'exam' ? '📝 模拟考试' : '📖 练习';
-        const srcTxt = h.type === 'practice' && h.source !== 'all' ? '（' + (h.source === 'wrong' ? '错题重练' : '收藏') + '）' : '';
+        const srcTxt = h.type === 'practice' && h.source !== 'all'
+          ? '（' + (h.source === 'wrong' ? '错题重练' : h.source === 'star' ? '收藏' : h.source === 'custom' ? '🎲 随机组题' : '') + '）' : '';
         const when = new Date(h.startedAt).toLocaleString();
         const dur = h.durationSec != null ? ' · ' + h.durationSec + 's' : '';
         return '<div class="hist-item"><span><b>' + KSB.esc(typeTxt) + '</b> ' +
