@@ -24,7 +24,28 @@ function listJs(dir) {
 }
 
 let indexHtml = read(join(appDir, 'index.html'));
-const css = read(join(appDir, 'css', 'style.css'));
+const css = read(join(appDir, 'css', 'style.css')) + `
+
+/* M13 mobile hotfix：新增「重复本轮」后，手机宽度不足时不允许工具条把整页撑宽。
+   手机端改为稳定的 2×2 工具按钮布局，摘要隐藏；其它页面/功能不动。 */
+body { max-width: 100%; overflow-x: hidden; }
+@media (max-width: 520px) {
+  .ptoolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+  }
+  .ptool-status { display: none; }
+  .ptool-btn {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
+`;
 
 // M13：在刷题工具条加“重复本轮”。与“重新开始”不同：
 // 重复本轮只清答案并回第 1 题，保留当前题目集合和当前顺序；随机模式不会重新洗牌，随机组题不会重抽。
