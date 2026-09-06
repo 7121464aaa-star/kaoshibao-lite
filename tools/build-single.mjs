@@ -80,6 +80,28 @@ if (inline['ui.js']) {
     `tip.textContent = session.mode === 'rand' ? '随机顺序，点"重新开始"重新打乱' : '';`,
     `tip.textContent = session.mode === 'rand' ? '随机顺序；「重复本轮」保持当前顺序再刷，「重新开始」重新打乱' : '';`
   );
+
+  // M14：每道题保存“最后一次作答结果”到原题记录。
+  // 随机组题/重复本轮只是不同练习入口；总库答题卡读取这里的最终状态，所以随机题做完后会回写总库。
+  inline['ui.js'] = inline['ui.js'].replace(
+    `    session.answers.set(q.id, { user, userText, state: res.state, expected: res.expected, detail: res.detail });\n    session.drafts.delete(q.id);`,
+    `    const latest = { user, userText, state: res.state, expected: res.expected, detail: res.detail };\n    session.answers.set(q.id, latest);\n    session.drafts.delete(q.id);\n\n    // M14：原题级“最后一次作答”——后一次直接覆盖前一次；错题本仍按原逻辑独立保留。\n    q.practiceState = res.state;\n    q.practiceUser = user;\n    q.practiceUserText = userText;\n    q.practiceExpected = res.expected;\n    q.practiceDetail = res.detail;\n    q.practiceAnsweredAt = new Date().toISOString();\n    try { await KSB.storePut('questions', q); } catch (e) { /* 总库进度持久化失败不阻塞当前判分 */ }`
+  );
+
+  // 总库（source=all）统计/答题卡：当前轮有答案时优先当前轮；否则读取原题保存的最后一次结果。
+  // 随机组题/错题重练/收藏练习仍只统计“当前这一轮”，因此点“重复本轮”会正常归零重做。
+  inline['ui.js'] = inline['ui.js'].replace(
+    `  /* ============ 统计与答题卡 ============ */\n  function refreshStats() {`,
+    `  /* ============ 统计与答题卡 ============ */\n  function visibleState(q) {\n    const a = session.answers.get(q.id);\n    if (a && (a.state === 'correct' || a.state === 'wrong')) return a.state;\n    if (session.source === 'all' && (q.practiceState === 'correct' || q.practiceState === 'wrong')) return q.practiceState;\n    return null;\n  }\n\n  function refreshStats() {`
+  );
+  inline['ui.js'] = inline['ui.js'].replace(
+    `    // M10：只统计当前筛选内题目；换筛选保留的旧痕迹不计入（答题卡同按当前题组）\n    session.questions.forEach(q => {\n      const a = session.answers.get(q.id);\n      if (a && a.state === 'correct') correct++;\n      else if (a && a.state === 'wrong') wrong++;\n    });`,
+    `    // M14：总库显示题目级最后一次结果；其它练习源只统计当前轮。\n    session.questions.forEach(q => {\n      const state = visibleState(q);\n      if (state === 'correct') correct++;\n      else if (state === 'wrong') wrong++;\n    });`
+  );
+  inline['ui.js'] = inline['ui.js'].replace(
+    `      const b = document.createElement('button');\n      b.className = 'sheet-cell';\n      const a = session.answers.get(q.id);\n      if (a && a.state === 'correct') b.classList.add('sc-correct');\n      else if (a && a.state === 'wrong') b.classList.add('sc-wrong');\n      else if (session.drafts.has(q.id)) { b.classList.add('sc-pending'); pending++; }`,
+    `      const b = document.createElement('button');\n      b.className = 'sheet-cell';\n      const state = visibleState(q);\n      if (state === 'correct') b.classList.add('sc-correct');\n      else if (state === 'wrong') b.classList.add('sc-wrong');\n      else if (session.drafts.has(q.id)) { b.classList.add('sc-pending'); pending++; }`
+  );
 }
 
 html = html.replace(scriptRe, (m, name) => {
