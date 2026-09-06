@@ -23,8 +23,19 @@ function listJs(dir) {
     .filter(f => statSync(f).isFile());
 }
 
-const indexHtml = read(join(appDir, 'index.html'));
+let indexHtml = read(join(appDir, 'index.html'));
 const css = read(join(appDir, 'css', 'style.css'));
+
+// M13：在刷题工具条加“重复本轮”。与“重新开始”不同：
+// 重复本轮只清答案并回第 1 题，保留当前题目集合和当前顺序；随机模式不会重新洗牌，随机组题不会重抽。
+indexHtml = indexHtml.replace(
+  '<div class="ptool-status" id="filterSummary" title="">本库全部 · 全题型 · 顺序 · 全章节</div>\n        <button id="btnAnsToggle"',
+  '<div class="ptool-status" id="filterSummary" title="">本库全部 · 全题型 · 顺序 · 全章节</div>\n        <button id="btnRepeatRound" class="btn ptool-btn" type="button" title="清空本轮作答，但保持当前题目和顺序不变">🔁 重复本轮</button>\n        <button id="btnAnsToggle"'
+);
+indexHtml = indexHtml.replace(
+  'onclick="document.getElementById(\'btnReset\').click()">再来一遍</button>',
+  'onclick="document.getElementById(\'btnRepeatRound\').click()">再来一遍</button>'
+);
 
 // 去外链 css
 let html = indexHtml.replace(/<link rel="stylesheet" href="css\/style\.css">/i,
@@ -37,6 +48,19 @@ for (const f of listJs(join(appDir, 'js'))) {
   const name = f.split(/[\\/]/).pop();
   inline[name] = read(f);
 }
+
+// M13：补入“重复本轮”的控制逻辑。这里直接改构建时的 ui.js 文本，避免触碰题库/答题判分逻辑。
+if (inline['ui.js']) {
+  inline['ui.js'] = inline['ui.js'].replace(
+    "    $('#btnPrev').addEventListener('click', () => goto(session.idx - 1));",
+    `    // M13：重复本轮——保留当前题组和顺序，只清空本轮答案并从第一题重新刷。\n    $('#btnRepeatRound').addEventListener('click', async () => {\n      if (!session.questions.length) { KSB.toast('当前没有可重复的题目', 'bad'); return; }\n      if ((session.answers.size || session.drafts.size) &&\n          !confirm('重复刷当前这轮题目（保持题目与顺序不变，清空当前作答记录）？')) return;\n      await commitHistory();\n      cancelAutoNext();\n      session.answers.clear();\n      session.drafts.clear();\n      session.idx = 0;\n      session.startedAt = new Date();\n      session.committed = false;\n      session.touched = 0;\n      lastQid = null;\n      renderAll();\n      KSB.toast('🔁 已重复本轮：题目与顺序保持不变', 'ok');\n    });\n    $('#btnPrev').addEventListener('click', () => goto(session.idx - 1));`
+  );
+  inline['ui.js'] = inline['ui.js'].replace(
+    `tip.textContent = session.mode === 'rand' ? '随机顺序，点"重新开始"重新打乱' : '';`,
+    `tip.textContent = session.mode === 'rand' ? '随机顺序；「重复本轮」保持当前顺序再刷，「重新开始」重新打乱' : '';`
+  );
+}
+
 html = html.replace(scriptRe, (m, name) => {
   const content = inline[name];
   if (!content) return m;
