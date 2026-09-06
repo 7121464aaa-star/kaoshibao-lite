@@ -763,17 +763,31 @@ html[data-theme="paper"] {
   --fb-ok-bg: linear-gradient(135deg, #ecfdf5, #f0fdfa);
   --fb-bad-bg: linear-gradient(135deg, #fef2f2, #fff1f2);
   --pending-bg: #fff7ed; --pending-border: #f59e0b; --pending-text: #b45309;
-  /* 默认青蓝·日光的三档背景：1柔和 / 2标准(=--bg) / 3明亮 */
-  --bg-1: #e9eef5; --bg-3: #fafbfe;
+  /* 默认青蓝·日光的三档背景：1柔和 / 2标准(=--bg) / 3明亮
+     M10：拉开三档色差（柔和=带蓝灰调的浅底，明亮=更纯净的亮底），让手机屏上也能一眼看出切换；
+     档位2（标准）保持 M8/M9 默认观感 #f2f5f9，默认无回归。 */
+  --bg-1: #dce7f3; --bg-3: #ffffff;
+  /* 档位按钮上的色点预览：与上面各档背景色一一对应（供手机端直观看到所选档位的颜色）。
+     独立命名（sun 组与 moon 组各用独立变量），不随当前生效模式变化，保证“日光背景”与“月光背景”两组按钮各自恒示本组色板。 */
+  --sun-1: #dce7f3; --sun-2: #f2f5f9; --sun-3: #ffffff;
+  --moon-1: #2c405c; --moon-2: #0f1a2b; --moon-3: #04070d;
 }
 /* 日光档位在另两套配色的补值（色系跟随各自主背景；data-shade 规则在文件尾统一生效） */
-html[data-theme="green"] { --bg-1: #e1ebdc; --bg-3: #f7fbf4; }
-html[data-theme="paper"] { --bg-1: #e9dfca; --bg-3: #faf5eb; }
+html[data-theme="green"] {
+  --bg-1: #d8e8d3; --bg-3: #ffffff;
+  --sun-1: #d8e8d3; --sun-2: #edf4ec; --sun-3: #ffffff;
+  --moon-1: #1e3a29; --moon-2: #0d1711; --moon-3: #020a05;
+}
+html[data-theme="paper"] {
+  --bg-1: #e7d9c0; --bg-3: #fffaf0;
+  --sun-1: #e7d9c0; --sun-2: #f2ecdf; --sun-3: #fffaf0;
+  --moon-1: #372a12; --moon-2: #191109; --moon-3: #070402;
+}
 
 /* —— 月光调色板 ① 默认青蓝（深蓝夜底） —— */
 html[data-mode="moon"][data-theme="default"] {
   color-scheme: dark;
-  --bg: #0f1a2b; --bg-1: #18293f; --bg-3: #070d16;
+  --bg: #0f1a2b; --bg-1: #2c405c; --bg-3: #04070d;
   --card: #1c2b44;
   --text: #e7eef8; --text-2: #c9d5e4; --muted: #94a5bc; --border: #2e4261;
   --primary: #93c5fd; --primary-dark: #60a5fa;
@@ -798,7 +812,7 @@ html[data-mode="moon"][data-theme="default"] {
 /* —— 月光调色板 ② 护眼绿（墨绿夜底） —— */
 html[data-mode="moon"][data-theme="green"] {
   color-scheme: dark;
-  --bg: #0d1711; --bg-1: #15271b; --bg-3: #060d08;
+  --bg: #0d1711; --bg-1: #1e3a29; --bg-3: #020a05;
   --card: #172a1e;
   --text: #e4f0e7; --text-2: #c3d7c9; --muted: #8dad95; --border: #2a4533;
   --primary: #86efac; --primary-dark: #4ade80;
@@ -823,7 +837,7 @@ html[data-mode="moon"][data-theme="green"] {
 /* —— 月光调色板 ③ 暖米纸张（琥珀暖夜底，夜里读感最暖） —— */
 html[data-mode="moon"][data-theme="paper"] {
   color-scheme: dark;
-  --bg: #191109; --bg-1: #251a0e; --bg-3: #0c0703;
+  --bg: #191109; --bg-1: #372a12; --bg-3: #070402;
   --card: #261a0f;
   --text: #f2e6cf; --text-2: #d8c6a6; --muted: #ab9372; --border: #423219;
   --primary: #fcd34d; --primary-dark: #f59e0b;
@@ -876,10 +890,33 @@ html { background: var(--bg); }
   box-shadow: 0 4px 12px -6px var(--glow);
 }
 .pick-group .pick-btn.active .pick-desc { opacity: .8; }
+/* —— M10：档位按钮前加该档实际底色的小圆点，手机屏上也能一眼看出点的是哪种背景；——
+   色点用 sun/moon 两组独立色板变量（各自模式恒定），不随当前生效模式漂移，两组按钮永远显示本组档位颜色。 */
+.shade-seg .shade-btn { flex-direction: row; align-items: center; gap: 6px; }
+.shade-seg .shade-btn::before {
+  content: ''; width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .14), 0 1px 2px rgba(0, 0, 0, .10);
+}
+.shade-seg[data-for="sun"] .shade-btn[data-shade="1"]::before { background: var(--sun-1); }
+.shade-seg[data-for="sun"] .shade-btn[data-shade="2"]::before { background: var(--sun-2); }
+.shade-seg[data-for="sun"] .shade-btn[data-shade="3"]::before { background: var(--sun-3); }
+.shade-seg[data-for="moon"] .shade-btn[data-shade="1"]::before { background: var(--moon-1); }
+.shade-seg[data-for="moon"] .shade-btn[data-shade="2"]::before { background: var(--moon-2); }
+.shade-seg[data-for="moon"] .shade-btn[data-shade="3"]::before { background: var(--moon-3); }
+/* 月光激活档位在深底上保持可辨（描边随主色亮化） */
+html[data-mode="moon"] .shade-seg .shade-btn.active::before { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .28), 0 0 0 2px var(--glow-strong); }
 @media (max-width: 520px) {
   .pick-group .pick-btn { padding: 6px 12px; font-size: 13px; border-radius: 11px; }
+  .shade-seg .shade-btn { gap: 5px; }
+  .shade-seg .shade-btn::before { width: 12px; height: 12px; }
   #view-settings .form-row > label { min-width: 0; }
 }
+
+/* ============ M11 追加样式：背题模式（一直显示答案） ============
+   开启后未作答的题目直接显示答案：选择类选项标绿（复用 .opt-correct），
+   下方反馈块用中性主题色（--tint 底 + --primary 标题，日光/月光各配色均有定义）。 */
+.fb-reveal { background: var(--tint); border-color: var(--tint-border); }
+.fb-reveal .fb-state { color: var(--primary); }
 
 
 

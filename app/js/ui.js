@@ -53,7 +53,8 @@
     answers: new Map(), // qid -> { user, userText, state, expected, detail }
     drafts: new Map(),  // qid -> 草稿（多选勾选/填空输入未提交判分 → 答题卡"待判"）
     startedAt: null,
-    committed: true
+    committed: true,
+    touched: 0         // M10：本轮实际作答次数（筛选内保留痕迹时，防止"全从旧痕迹继承"也被当成新完成一轮）
   };
 
   const wrongCache = new Map();
@@ -64,7 +65,8 @@
   /* M8：答对自动下一题 定时器 + 本机偏好（主题/自动下一题，存 settings，见设置页）
      M9：新增「模式」维度（日光=浅色底 / 月光=深色底，正交于配色）+ 两种模式的「背景深浅」档位（1柔和/2标准/3明亮、1柔灰/2标准/3近黑） */
   let autoNextTimer = null;
-  const prefs = { theme: 'default', mode: 'sun', autoNext: true, shadeSun: '2', shadeMoon: '2' };
+  /* M11：prefs 增 showAnswer —— 背题模式（一直显示答案，免作答；默认关，settings 键 showAnswer） */
+  const prefs = { theme: 'default', mode: 'sun', autoNext: true, shadeSun: '2', shadeMoon: '2', showAnswer: false };
   const THEME_COLORS = { default: '#2563eb', green: '#15803d', paper: '#b45309' };
   const THEME_NAMES = { default: '默认青蓝', green: '护眼绿', paper: '暖米纸张' };
   const MODE_NAMES = { sun: '日光', moon: '月光' };
@@ -125,7 +127,7 @@
     showTab('practice');
   }
 
-  /* M8+M9：读取并应用本机偏好（配色主题 + 模式(日光/月光) + 两种模式的背景深浅档位 + 答对自动下一题开关） */
+  /* M8+M9+M11：读取并应用本机偏好（配色主题 + 模式(日光/月光) + 两种模式的背景深浅档位 + 答对自动下一题开关 + 背题模式开关） */
   async function loadPrefs() {
     try {
       const t = await KSB.getSetting('theme');
@@ -138,9 +140,12 @@
       if (sm && SHADE_LABEL.moon[sm]) prefs.shadeMoon = sm;
       const an = await KSB.getSetting('autoNext');
       prefs.autoNext = an !== false;     // 默认开启
+      const sa = await KSB.getSetting('showAnswer');
+      prefs.showAnswer = sa === true;    // 默认关闭
     } catch (e) { /* 读取失败保持默认 */ }
     applyAppearance();
     syncPrefControls();
+    syncFilterSummary();   // M11：首屏进入时若背题模式开着，摘要带上"背题"状态
   }
 
   /* M9：把 配色(theme) × 模式(mode) × 背景档位(shade) 落到 <html> 属性上，CSS 依此出整套外观；
@@ -152,9 +157,21 @@
     el.dataset.shade = prefs.mode === 'moon' ? prefs.shadeMoon : prefs.shadeSun;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      const set = META_COLORS[prefs.mode] || META_COLORS.sun;
-      meta.content = set[prefs.theme] || THEME_COLORS[prefs.theme] || '#2563eb';
+      // M10：月光档位（近黑/柔灰/标准）直接影响手机浏览器顶栏/任务卡颜色 → 点档位手机观感立刻变化；
+      // 日光沿用各配色品牌色（观感同 M8/M9，不做改变）。
+      const fallback = (META_COLORS[prefs.mode] || META_COLORS.sun)[prefs.theme] || '#2563eb';
+      meta.content = prefs.mode === 'moon' ? (getEffectiveBg() || fallback) : fallback;
     }
+  }
+  /* 读当前生效页面底色：body 的 background 末层为 var(--bg)，其 backgroundColor 已解析成 rgb 色值；
+     （自定义属性 --bg 的 getPropertyValue 在未注册属性下返回未替换的 var() 文本，不可直接给 meta 用） */
+  function getEffectiveBg() {
+    try {
+      const cs = getComputedStyle(document.body);
+      const c = cs.backgroundColor;
+      if (c && c !== 'transparent' && c !== 'rgba(0, 0, 0, 0)') return c;
+      return getComputedStyle(document.documentElement).backgroundColor || null;
+    } catch (e) { return null; }
   }
 
   async function pickTheme(name) {
@@ -179,7 +196,12 @@
   async function pickShade(mode, val) {
     if (!SHADE_LABEL[mode] || !SHADE_LABEL[mode][val]) return;
     if (mode === 'sun') prefs.shadeSun = val; else prefs.shadeMoon = val;
-    if (prefs.mode === mode) applyAppearance();   // 只影响当前生效模式的背景
+    // M10：点「非当前模式」那组档位时，直接切到该模式再应用 → 手机上点档位必有可见效果（不再像"没反应"）
+    if (prefs.mode !== mode) {
+      prefs.mode = mode;
+      try { await KSB.setSetting('mode', mode); } catch (e) { /* 同上 */ }
+    }
+    applyAppearance();
     syncPrefControls();
     KSB.toast('已设置' + MODE_NAMES[mode] + '背景：' + SHADE_LABEL[mode][val], '');
     try {
@@ -191,6 +213,17 @@
     prefs.autoNext = !!on;
     KSB.toast(on ? '答对将自动跳下一题' : '已关闭自动下一题（答对停留）', '');
     try { await KSB.setSetting('autoNext', prefs.autoNext); } catch (e) { /* 同上 */ }
+  }
+
+  /* M11：背题模式（一直显示答案）——开/关即时生效并持久化。
+     开启后每题不用作答，直接标绿正确选项/填入填空答案，并在下方显示 正确答案+解析；翻题也一直显示。 */
+  async function setShowAnswerPref(on) {
+    prefs.showAnswer = !!on;
+    syncPrefControls();
+    syncFilterSummary();
+    renderQuestion();      // 当前题立即按新模式显示/隐藏答案
+    KSB.toast(on ? '背题模式已开：每题直接显示正确答案与解析，翻题一直显示' : '已关闭背题模式（恢复正常作答判分）', on ? 'ok' : '');
+    try { await KSB.setSetting('showAnswer', prefs.showAnswer); } catch (e) { /* 同上 */ }
   }
 
   function syncPrefControls() {
@@ -214,6 +247,15 @@
     });
     const cb = $('#optAutoNext');
     if (cb) cb.checked = !!prefs.autoNext;
+    // M11：背题模式开关（设置页复选框 + 刷题页工具条按钮同源同步）
+    const cbAns = $('#optShowAnswer');
+    if (cbAns) cbAns.checked = !!prefs.showAnswer;
+    const ab = $('#btnAnsToggle');
+    if (ab) {
+      ab.classList.toggle('active', !!prefs.showAnswer);
+      ab.setAttribute('aria-pressed', prefs.showAnswer ? 'true' : 'false');
+      ab.textContent = prefs.showAnswer ? '👁 答案·开' : '👁 答案';
+    }
   }
 
   /* M8：刷题页一行入口 —— 筛选面板开合 */
@@ -301,15 +343,14 @@
     $('#qOptions').addEventListener('change', onDraftChange);
     $('#qOptions').addEventListener('input', onDraftInput);
 
-    // 练习源
+    // 练习源（M10：切换不再清空当前作答痕迹、不再弹确认；统计/答题卡只按当前筛选内题目计）
     $$('#view-practice .chip[data-src]').forEach(c => c.addEventListener('click', () => switchSource(c.dataset.src)));
     // 题型过滤
     $$('#view-practice .chip[data-ftype]').forEach(c => c.addEventListener('click', () => {
       const t = c.dataset.ftype;
       if (!session.excluded.has(t) && session.excluded.size >= 3) { KSB.toast('至少保留一种题型', 'bad'); return; }
-      if ((session.answers.size || session.drafts.size) && !confirm('调整题型范围将清空当前作答记录，继续？')) return;
       if (session.excluded.has(t)) session.excluded.delete(t); else session.excluded.add(t);
-      startSession(session.bankId, { keepMode: true, source: session.source });
+      startSession(session.bankId, { keepMode: true, source: session.source, keepTraces: true });
     }));
     // 章节筛选
     $('#chapterChips').addEventListener('click', e => {
@@ -317,17 +358,15 @@
       if (!chip) return;
       const ch = chip.dataset.chapter;
       if (ch === session.chapter) return;
-      if ((session.answers.size || session.drafts.size) && !confirm('切换章节将清空当前作答记录，继续？')) return;
       session.chapter = ch;
-      startSession(session.bankId, { keepMode: true, source: session.source });
+      startSession(session.bankId, { keepMode: true, source: session.source, keepTraces: true });
     });
     // 模式
     $$('#view-practice .chip[data-mode]').forEach(c => c.addEventListener('click', () => {
       const mode = c.dataset.mode;
       if (mode === session.mode) return;
-      if ((session.answers.size || session.drafts.size) && !confirm('切换练习模式将清空当前作答记录，继续？')) return;
       session.mode = mode;
-      startSession(session.bankId, { keepMode: true, source: session.source });
+      startSession(session.bankId, { keepMode: true, source: session.source, keepTraces: true });
     }));
 
     // 错题本范围 chips
@@ -437,6 +476,9 @@
       b.addEventListener('click', () => pickShade(b.closest('.shade-seg').dataset.for, b.dataset.shade));
     });
     $('#optAutoNext').addEventListener('change', e => setAutoNextPref(e.target.checked));
+    // M11：背题模式开关（刷题页工具条按钮 + 设置页复选框）
+    $('#optShowAnswer').addEventListener('change', e => setShowAnswerPref(e.target.checked));
+    $('#btnAnsToggle').addEventListener('click', () => setShowAnswerPref(!prefs.showAnswer));
   }
 
   /* 练习某题库中的指定题目：切库 → 定位该题（source 过滤可选，如 star） */
@@ -467,8 +509,8 @@
       const qids = await KSB.getStarQids(session.bankId);
       if (!qids.length) { KSB.toast('本库暂无收藏题目（答题页点 ☆ 收藏）', 'bad'); return; }
     }
-    if ((session.answers.size || session.drafts.size) && !confirm('切换练习源将清空当前作答记录，继续？')) return;
-    await startSession(session.bankId, { keepMode: true, source });
+    // M10：切换练习源不清空当前作答痕迹、不弹确认；统计/答题卡只按当前筛选内题目计
+    await startSession(session.bankId, { keepMode: true, source, keepTraces: true });
   }
 
   async function startSession(bankId, opts) {
@@ -476,7 +518,8 @@
     const keepMode = opts && opts.keepMode;
     const source = (opts && opts.source) || 'all';
     const bankChanged = bankId !== session.bankId;
-    await commitHistory();
+    const keepTraces = !!(opts && opts.keepTraces) && !bankChanged;
+    if (!keepTraces) await commitHistory();   // 换库/重新开始：先落当前一轮历史再清空；筛选内切换(keepTraces)不落历史、保留痕迹
     const bank = await KSB.storeGet('banks', bankId);
     let questions = bankId ? await KSB.getBankQuestions(bankId) : [];
     questions.sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }));
@@ -502,14 +545,19 @@
 
     session.bankId = bankId;
     session.bank = bank;
-    session.questions = questions;
+    // 顺序/随机：顺序=题库 id 序；随机=Fisher-Yates 打乱（bugfix：M7/M8 筛选面板重构时丢了 shuffle 的调用点，
+    // 导致"随机"与"顺序"排列完全相同；重开/切模式都会重新走 startSession → 随机模式每次重新打乱）
+    if (!keepMode) session.mode = 'seq';
+    session.questions = session.mode === 'rand' ? shuffle(questions) : questions;
     session.source = source;
     session.idx = 0;
-    session.answers.clear();
-    session.drafts.clear();
+    if (!keepTraces) {
+      session.answers.clear();
+      session.drafts.clear();
+    }
     session.startedAt = new Date();
     session.committed = false;
-    if (!keepMode) session.mode = 'seq';
+    session.touched = 0;   // M10：新的一轮，作答计数归零
     syncChips();
     renderChapterChips(chapters);
     renderAll();
@@ -560,6 +608,7 @@
       session.mode === 'rand' ? '随机' : '顺序',
       session.chapter || '全章节'
     ];
+    if (prefs.showAnswer) parts.push('背题');   // M11：背题模式下摘要带状态
     el.textContent = parts.join(' · ');
     el.title = el.textContent;
   }
@@ -594,13 +643,15 @@
     items.forEach(it => wrongCache.set(it.qid, it));
   }
 
-  /* 练习历史落库：会话切换/重置/完成时各一次 */
+  /* 练习历史落库：换库/重新开始（离开当前一轮）时调用；筛选内切换(keepTraces)不落历史、痕迹保留。
+     M10：统计只按「当前筛选内题目」计，保留在 answers/drafts 里但不属于当前题组的旧痕迹不计入。 */
   async function commitHistory() {
     if (!session.bankId || session.committed || session.startedAt == null) return;
     let correct = 0, wrong = 0;
-    session.answers.forEach(a => {
-      if (a.state === 'correct') correct++;
-      else if (a.state === 'wrong') wrong++;
+    session.questions.forEach(q => {
+      const a = session.answers.get(q.id);
+      if (a && a.state === 'correct') correct++;
+      else if (a && a.state === 'wrong') wrong++;
     });
     if (!correct && !wrong) return; // 无作答不记
     const finishedAt = new Date();
@@ -664,10 +715,12 @@
     const ans = session.answers.get(q.id);
     const draft = session.drafts.get(q.id);
     const done = !!(ans && ans.state);
+    /* M11：背题模式 —— 未判分时也直接展示正确答案（只读浏览，见 markReveal/renderFeedback） */
+    const reveal = prefs.showAnswer && !done;
 
     const box = $('#qOptions');
     box.dataset.qid = q.id;
-    box.dataset.locked = done ? '1' : '0';
+    box.dataset.locked = (done || reveal) ? '1' : '0';
     box.classList.remove('locked');
 
     /* M7：真正切到另一道题时，题干与选项做一次柔和入场（同题重渲染不打扰） */
@@ -692,11 +745,16 @@
       });
       html += '<div class="action-row"><button class="btn btn-primary" data-action="submit-multi">提交本题</button></div>';
       if (done) html += '<div class="note">本题已判分，不能修改答案</div>';
+      else if (reveal) html += '<div class="note">背题模式：绿色为正确答案，直接浏览记忆即可</div>';
       else if (draft) html += '<div class="note">已勾选未提交 → 答题卡显示"待判"，点"提交本题"判分</div>';
       box.innerHTML = html;
       if (done) {
         box.querySelectorAll('input').forEach(i => i.disabled = true);
         markChoiceHighlight(box, q, ans);
+        box.classList.add('locked');
+      } else if (reveal) {
+        box.querySelectorAll('input').forEach(i => i.disabled = true);
+        markReveal(box, q);
         box.classList.add('locked');
       }
       renderFeedback(ans, q);
@@ -712,9 +770,13 @@
           (vals[i] != null ? ' value="' + KSB.esc(String(vals[i])) + '"' : '') + '>';
       }
       html += '<div class="action-row"><button class="btn btn-primary" data-action="submit-fill">提交本题</button></div>';
+      if (reveal) html += '<div class="note">背题模式：已填入（第一个可接受的）正确答案，直接浏览记忆即可</div>';
       box.innerHTML = html;
       if (done) {
         box.querySelectorAll('input').forEach(i => i.disabled = true);
+        box.classList.add('locked');
+      } else if (reveal) {
+        fillRevealInputs(box, q);
         box.classList.add('locked');
       }
       renderFeedback(ans, q);
@@ -730,17 +792,24 @@
     if (done) {
       box.classList.add('locked');
       markChoiceHighlight(box, q, ans);
+    } else if (reveal) {
+      box.classList.add('locked');
+      markReveal(box, q);
     }
     renderFeedback(ans, q);
     syncStarUI(q);
   }
 
+  /* 当前题正确选项的 key 列表（judge 用 'true'/'false'，single 用字母，multiple 用字母数组） */
+  function correctKeysOf(q) {
+    if (q.type === 'judge') return q.answer === true ? ['true'] : ['false'];
+    if (q.type === 'single') return [String(q.answer)];
+    return (q.answer || []).map(String);
+  }
+
   function markChoiceHighlight(box, q, ans) {
     if (!ans) return;
-    const correctKeys = q.type === 'judge'
-      ? (q.answer === true ? ['true'] : ['false'])
-      : q.type === 'single' ? [String(q.answer)]
-      : (q.answer || []).map(String);
+    const correctKeys = correctKeysOf(q);
     const userVals = q.type === 'multiple' ? (ans.user || []).map(String) : [String(ans.user)];
     box.querySelectorAll('.opt').forEach(el => {
       const val = el.dataset.val;
@@ -749,10 +818,43 @@
     });
   }
 
+  /* M11：背题模式 —— 直接标绿正确选项（无作答痕迹，不标错选） */
+  function markReveal(box, q) {
+    const correctKeys = correctKeysOf(q);
+    box.querySelectorAll('.opt').forEach(el => {
+      if (correctKeys.includes(el.dataset.val)) el.classList.add('opt-correct');
+    });
+  }
+
+  /* M11：背题模式 —— 填空输入框直接填入每空第一组可接受答案并锁定 */
+  function fillRevealInputs(box, q) {
+    const a = q.answer;
+    let blanks = [];
+    if (a != null) {
+      if (Array.isArray(a) && a.length && Array.isArray(a[0])) blanks = a.map(g => String(g[0] != null ? g[0] : ''));
+      else if (Array.isArray(a)) blanks = a.map(v => String(v == null ? '' : v));
+      else blanks = [String(a)];
+    }
+    box.querySelectorAll('.fill-input').forEach((inp, i) => {
+      inp.value = blanks[i] != null ? blanks[i] : '';
+      inp.disabled = true;
+    });
+  }
+
   function renderFeedback(ans, q) {
     const fb = $('#feedback');
-    if (!ans) { fb.hidden = true; return; }
+    /* M11：背题模式且本题未作答 → 直接展示 正确答案+解析（无对错状态） */
+    const reveal = prefs.showAnswer && !ans;
+    if (!ans && !reveal) { fb.hidden = true; return; }
     fb.hidden = false;
+    if (reveal) {
+      fb.className = 'feedback fb-reveal';
+      fb.innerHTML =
+        '<div class="fb-state">📖 背题模式 · 正确答案如下</div>' +
+        '<div class="fb-expected"><b>正确答案：</b>' + KSB.esc(KSB.answerText(q)) + '</div>' +
+        (q && q.analysis ? '<div class="fb-analysis"><b>解析：</b>' + KSB.esc(q.analysis) + '</div>' : '');
+      return;
+    }
     fb.className = 'feedback ' + (ans.state === 'correct' ? 'fb-correct' : 'fb-wrong');
     const stateText = ans.state === 'correct' ? '✅ 回答正确' : '❌ 回答错误';
     fb.innerHTML =
@@ -827,6 +929,7 @@
     const userText = userTextOf(q, user);
     session.answers.set(q.id, { user, userText, state: res.state, expected: res.expected, detail: res.detail });
     session.drafts.delete(q.id);
+    session.touched++;   // M10：本轮真实作答计数（供"已完成"判定的防伪）
     renderQuestion();
     refreshStats();
     renderSheet();
@@ -844,9 +947,11 @@
   /* ============ 统计与答题卡 ============ */
   function refreshStats() {
     let correct = 0, wrong = 0;
-    session.answers.forEach(a => {
-      if (a.state === 'correct') correct++;
-      else if (a.state === 'wrong') wrong++;
+    // M10：只统计当前筛选内题目；换筛选保留的旧痕迹不计入（答题卡同按当前题组）
+    session.questions.forEach(q => {
+      const a = session.answers.get(q.id);
+      if (a && a.state === 'correct') correct++;
+      else if (a && a.state === 'wrong') wrong++;
     });
     const total = session.questions.length;
     const doneCount = correct + wrong;
@@ -859,7 +964,7 @@
     const sc = $('#sheetCount');
     if (sc) sc.textContent = doneCount + '/' + total;
 
-    const last = total > 0 && session.idx === total - 1 && doneCount === total;
+    const last = total > 0 && session.idx === total - 1 && doneCount === total && session.touched > 0;
     const tip = $('#doneTip');
     tip.hidden = !last;
     if (last) {

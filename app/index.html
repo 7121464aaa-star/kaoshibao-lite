@@ -17,7 +17,7 @@
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M9</span></div>
+      <div class="brand"><span class="brand-emoji">📚</span><span class="brand-grad">考试宝自用版</span><span class="m0-tag">M11</span></div>
       <div class="bank-row">
         <select id="bankSelect" title="当前题库"></select>
         <button id="btnReset" class="btn btn-ghost" title="清空本次作答，重新开始">重新开始</button>
@@ -50,10 +50,12 @@
   <main>
     <!-- ========== 刷题视图 ========== -->
     <section id="view-practice">
-      <!-- M8：顶部只留一行入口（筛选 / 答题卡），面板与答题卡默认收起，把垂直空间让给题目与选项 -->
+      <!-- M8：顶部只留一行入口（筛选 / 答题卡），面板与答题卡默认收起，把垂直空间让给题目与选项；
+           M11：加「👁 答案」背题模式开关（开=每题直接显示正确答案与解析，翻题一直显示，免作答） -->
       <div class="ptoolbar">
         <button id="btnFilterToggle" class="btn ptool-btn" type="button" aria-expanded="false">⚙ 筛选</button>
         <div class="ptool-status" id="filterSummary" title="">本库全部 · 全题型 · 顺序 · 全章节</div>
+        <button id="btnAnsToggle" class="btn ptool-btn" type="button" aria-pressed="false" title="背题模式：开启后每题直接显示正确答案与解析（不用作答，翻题也一直显示）">👁 答案</button>
         <button id="btnSheetToggle" class="btn ptool-btn" type="button" aria-expanded="false">🗂 答题卡 <b class="cnt" id="sheetCount">0/0</b></button>
       </div>
 
@@ -326,7 +328,10 @@
         <div class="form-row">
           <label class="switch-row"><input type="checkbox" id="optAutoNext" checked> <span>答对自动下一题（约 0.6 秒）</span></label>
         </div>
-        <div class="form-note">配色决定整体色系（青蓝/护眼绿/暖米），模式与背景档位决定底色亮度：☀️ 日光用浅色底，🌙 月光用深色底（夜里/暗处护眼），各自还能选背景深浅档位。全部立即生效并记住在本机。自动下一题仅在「刷题」模式生效：答对约 0.6 秒后自动切下一题，答错停留看正确答案/解析；模拟考试不受影响（交卷才判分）。</div>
+        <div class="form-row">
+          <label class="switch-row"><input type="checkbox" id="optShowAnswer"> <span>背题模式：直接显示答案（免作答，翻题一直显示）</span></label>
+        </div>
+        <div class="form-note">配色决定整体色系（青蓝/护眼绿/暖米），模式与背景档位决定底色亮度：☀️ 日光用浅色底，🌙 月光用深色底（夜里/暗处护眼），各自还能选背景深浅档位（点某组档位会切到对应模式并立即生效，两组各自记住）。自动下一题仅在「刷题」模式生效：答对约 0.6 秒后自动切下一题，答错停留看正确答案/解析；模拟考试不受影响（交卷才判分）。<b>背题模式</b>在刷题页顶部「👁 答案」也可一键开关：开启后每题直接标出正确答案（选择类绿色高亮、填空自动填入）并在下方显示「正确答案 + 解析」，翻题时一直显示、无需逐题作答；想自测时再关掉即可恢复正常判分。</div>
       </div>
 
       <div class="import-card" style="margin-top:12px">
