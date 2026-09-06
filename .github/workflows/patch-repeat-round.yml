@@ -1,0 +1,112 @@
+name: One-off patch repeat current round
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-repeat-round.yml'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  patch-build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add repeat-current-round behavior
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          index = Path('app/index.html')
+          s = index.read_text(encoding='utf-8')
+          old = '''        <button id="btnFilterToggle" class="btn ptool-btn" type="button" aria-expanded="false">⚙ 筛选</button>
+        <div class="ptool-status" id="filterSummary" title="">本库全部 · 全题型 · 顺序 · 全章节</div>
+        <button id="btnAnsToggle" class="btn ptool-btn" type="button" aria-pressed="false" title="背题模式：开启后每题直接显示正确答案与解析（不用作答，翻题也一直显示）">👁 答案</button>'''
+          new = '''        <button id="btnFilterToggle" class="btn ptool-btn" type="button" aria-expanded="false">⚙ 筛选</button>
+        <div class="ptool-status" id="filterSummary" title="">本库全部 · 全题型 · 顺序 · 全章节</div>
+        <button id="btnRepeatRound" class="btn ptool-btn" type="button" title="清空本轮作答，但保持当前题目和顺序不变">🔁 重复本轮</button>
+        <button id="btnAnsToggle" class="btn ptool-btn" type="button" aria-pressed="false" title="背题模式：开启后每题直接显示正确答案与解析（不用作答，翻题也一直显示）">👁 答案</button>'''
+          if old not in s:
+              raise SystemExit('index toolbar anchor not found')
+          s = s.replace(old, new, 1)
+
+          old_done = '''          <button id="btnDoneAgain" class="btn btn-primary" onclick="document.getElementById('btnReset').click()">再来一遍</button>'''
+          new_done = '''          <button id="btnDoneAgain" class="btn btn-primary" onclick="document.getElementById('btnRepeatRound').click()">再来一遍</button>'''
+          if old_done not in s:
+              raise SystemExit('index done button anchor not found')
+          s = s.replace(old_done, new_done, 1)
+          index.write_text(s, encoding='utf-8')
+
+          ui = Path('app/js/ui.js')
+          s = ui.read_text(encoding='utf-8')
+          anchor = '''    $('#btnPrev').addEventListener('click', () => goto(session.idx - 1));'''
+          insert = '''    // 重复本轮：保留当前题目集合与当前顺序，只清空本轮答案并从第 1 题重新刷。
+    // 随机模式下不会重新打乱；随机组题下也不会重抽另一组。
+    $('#btnRepeatRound').addEventListener('click', async () => {
+      if (!session.questions.length) { KSB.toast('当前没有可重复的题目', 'bad'); return; }
+      if ((session.answers.size || session.drafts.size) &&
+          !confirm('重复刷当前这轮题目（保持题目与顺序不变，清空当前作答记录）？')) return;
+      await commitHistory();
+      cancelAutoNext();
+      session.answers.clear();
+      session.drafts.clear();
+      session.idx = 0;
+      session.startedAt = new Date();
+      session.committed = false;
+      session.touched = 0;
+      lastQid = null;
+      renderAll();
+      KSB.toast('🔁 已重复本轮：题目与顺序保持不变', 'ok');
+    });
+    $('#btnPrev').addEventListener('click', () => goto(session.idx - 1));'''
+          if anchor not in s:
+              raise SystemExit('ui bindEvents anchor not found')
+          s = s.replace(anchor, insert, 1)
+
+          old_tip = '''    tip.textContent = session.mode === 'rand' ? '随机顺序，点"重新开始"重新打乱' : '';'''
+          new_tip = '''    tip.textContent = session.mode === 'rand' ? '随机顺序；「重复本轮」保持当前顺序再刷，「重新开始」重新打乱' : '';'''
+          if old_tip not in s:
+              raise SystemExit('ui random mode tip anchor not found')
+          s = s.replace(old_tip, new_tip, 1)
+          ui.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit patched app
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/index.html app/js/ui.js
+          if git diff --cached --quiet; then
+            echo "No app changes to commit"
+          else
+            git commit -m "feat: add repeat current round button"
+            git push origin HEAD:main
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build PWA from patched working tree
+        run: |
+          node tools/make-icons.mjs
+          node tools/build-single.mjs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
